@@ -6,7 +6,95 @@ import pandas as pd # 引入 pandas 用於數據處理和圖表
 import plotly.graph_objects as go # 引入 plotly 用於互動式圖表
 import plotly.express as px # 引入 plotly.express 用於簡化圖表創建
 
-st.set_page_config(page_title="CitySim 世界模擬器 Pro", layout="wide")
+st.set_page_config(page_title="🌐 CitySim 世界模擬器 Pro", layout="wide")
+
+# --- 自訂 CSS 樣式 ---
+st.markdown("""
+<style>
+    /* 全局字體 */
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* 標題居中 */
+    h1 {
+        text-align: center;
+        color: #2c3e50;
+    }
+
+    /* 按鈕樣式 */
+    div.stButton > button:first-child {
+        background-color: #4CAF50; /* 綠色 */
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 10px 24px;
+        font-size: 18px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+        cursor: pointer;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #45a049; /* 深綠色 */
+        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
+        transform: translateY(-2px);
+    }
+
+    /* 側邊欄按鈕樣式 (與主按鈕區分) */
+    .st-emotion-cache-1c7y2vl button { /* 這是 Streamlit 側邊欄按鈕的類名 */
+        background-color: #3498db; /* 藍色 */
+        color: white;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 16px;
+        transition: all 0.2s ease;
+    }
+    .st-emotion-cache-1c7y2vl button:hover {
+        background-color: #2980b9; /* 深藍色 */
+        transform: translateY(-1px);
+    }
+
+    /* 卡片樣式容器 */
+    .st-emotion-cache-eczf16 { /* 這是 st.container 的一個常見類名，可能需要根據實際部署調整 */
+        background-color: #ffffff;
+        border-radius: 15px;
+        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
+        padding: 25px;
+        margin-bottom: 30px;
+        border: 1px solid #e0e0e0;
+    }
+
+    /* 訊息框樣式 */
+    .st-emotion-cache-1xw879w { /* st.info, st.warning 的容器 */
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    /* 展開器樣式 (日報) */
+    .streamlit-expanderHeader {
+        background-color: #f8f8f8;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #333;
+        border: 1px solid #ddd;
+        transition: background-color 0.2s ease;
+    }
+    .streamlit-expanderHeader:hover {
+        background-color: #f0f0f0;
+    }
+
+    /* 進度條文字顏色 */
+    .st-emotion-cache-10q2x2u { /* st.markdown 的容器 */
+        color: #e67e22; /* 橙色 */
+        font-weight: bold;
+    }
+
+</style>
+""", unsafe_allow_html=True)
 
 # --- 定義資料結構 ---
 class Citizen:
@@ -74,7 +162,6 @@ class City:
 
 class Planet:
     """代表一個行星及其上的城市。"""
-    # 移除 is_earth 參數
     def __init__(self, name, alien=False): 
         self.name = name
         self.cities = [] # 行星上的城市列表
@@ -88,7 +175,6 @@ class Planet:
         self.war_duration = {} # 與各行星的戰爭持續時間 (key: other_planet_name, value: duration_in_years)
         self.epidemic_active = False # 新增：是否有疫情爆發
         self.epidemic_severity = 0.0 # 新增：疫情嚴重程度
-        # 移除 self.is_earth = is_earth
 
 class Galaxy:
     """代表整個星系，包含所有行星和年份。"""
@@ -106,7 +192,6 @@ class Galaxy:
 def initialize_galaxy():
     """初始化星系、行星和城市數據。"""
     new_galaxy = Galaxy()
-    # 移除 is_earth=True
     earth = Planet("地球") 
     for cname in ["臺北", "東京", "首爾"]:
         city = City(cname)
@@ -151,8 +236,8 @@ st.markdown("---") # 分隔線
 # 設置側邊欄用於控制模擬參數
 with st.sidebar:
     st.header("⚙️ 模擬設定") 
-    # 將 years_to_simulate 改為 years_per_step
-    years_per_step = st.slider("每個步驟模擬年數", 1, 20, 10, help="選擇每次點擊按鈕模擬的年數")
+    # 調整每個步驟模擬年數的最大值到 100
+    years_per_step = st.slider("每個步驟模擬年數", 1, 100, 10, help="選擇每次點擊按鈕模擬的年數")
     simulate_step_button = st.button("執行模擬步驟") # 新增模擬步驟按鈕
     st.markdown("---")
     st.header("🏙️ 城市選擇") 
@@ -260,6 +345,36 @@ if simulate_step_button:
         progress_status.markdown(f"**--- 模擬年份 {galaxy.year} ---**")
         
         current_year_global_events = [] # 儲存本年度所有事件，用於日報
+
+        # 隨機生成市民小故事
+        if random.random() < 0.15: # 15% 機率生成小故事
+            all_active_citizens = []
+            for p in galaxy.planets:
+                if p.is_alive:
+                    for c in p.cities:
+                        all_active_citizens.extend([citizen for citizen in c.citizens if citizen.alive])
+            
+            if all_active_citizens:
+                story_citizen = random.choice(all_active_citizens)
+                story_templates = [
+                    f"市民 {story_citizen.name} (來自 {story_citizen.city}) 在當地市場發現了稀有香料，財富略有增加！",
+                    f"科學家 {story_citizen.name} (來自 {story_citizen.city}) 發表了關於星際旅行的新理論，引起廣泛關注。",
+                    f"藝術家 {story_citizen.name} (來自 {story_citizen.city}) 創作了一幅描繪和平星系的畫作，激勵了許多人。",
+                    f"工程師 {story_citizen.name} (來自 {story_citizen.city}) 成功修復了城市能源系統，避免了一場危機。",
+                    f"市民 {story_citizen.name} (來自 {story_citizen.city}) 參與了社區志願活動，提升了城市信任度。",
+                    f"無業的 {story_citizen.name} (來自 {story_citizen.city}) 終於找到了一份 {random.choice(['農民', '服務員'])} 的工作，生活開始好轉。",
+                    f"商人 {story_citizen.name} (來自 {story_citizen.city}) 成功拓展了跨行星貿易路線，為城市帶來了豐富資源。",
+                    f"醫生 {story_citizen.name} (來自 {story_citizen.city}) 發現了一種新的疾病治療方法，挽救了許多生命。",
+                    f"教師 {story_citizen.name} (來自 {story_citizen.city}) 的學生在聯邦科學競賽中獲得了第一名，為城市爭光。",
+                    f"服務員 {story_citizen.name} (來自 {story_citizen.city}) 以其熱情周到的服務贏得了市民的廣泛讚譽。",
+                    f"小偷 {story_citizen.name} (來自 {story_citizen.city}) 在一次行動中失手被捕，被關押了一段時間。",
+                    f"黑幫成員 {story_citizen.name} (來自 {story_citizen.city}) 在一次幫派衝突中受傷，健康狀況惡化。",
+                    f"詐騙犯 {story_citizen.name} (來自 {story_citizen.city}) 成功策劃了一場大型騙局，獲得了巨額財富。",
+                    f"毒販 {story_citizen.name} (來自 {story_citizen.city}) 的毒品交易被聯邦特工發現，面臨嚴峻的法律制裁。"
+                ]
+                story_msg = f"{galaxy.year} 年：✨ {random.choice(story_templates)}"
+                current_year_global_events.append(story_msg)
+
 
         # 重置每年的計數器和事件
         for planet in galaxy.planets:
@@ -890,84 +1005,130 @@ progress_status.empty()
 # --- 顯示資訊 ---
 st.markdown("---") # 分隔線
 st.markdown("## 🌍 星系概況")
-# 顯示聯邦領導人資訊
-if galaxy.federation_leader:
-    st.markdown(f"**聯邦領導人：** {galaxy.federation_leader.name} (來自 {galaxy.federation_leader.city})")
-else:
-    st.markdown("**聯邦領導人：** 暫無")
+with st.container(): # 使用容器來應用卡片樣式
+    # 顯示聯邦領導人資訊
+    if galaxy.federation_leader:
+        st.markdown(f"**聯邦領導人：** {galaxy.federation_leader.name} (來自 {galaxy.federation_leader.city})")
+    else:
+        st.markdown("**聯邦領導人：** 暫無")
 
-# 顯示當前政策資訊
-if galaxy.active_federation_policy:
-    policy = galaxy.active_federation_policy
-    st.markdown(f"**當前聯邦政策：** 「{policy['type']}」 (剩餘 {galaxy.policy_duration_left} 年)")
-else:
-    st.markdown("**當前聯邦政策：** 無")
+    # 顯示當前政策資訊
+    if galaxy.active_federation_policy:
+        policy = galaxy.active_federation_policy
+        st.markdown(f"**當前聯邦政策：** 「{policy['type']}」 (剩餘 {galaxy.policy_duration_left} 年)")
+    else:
+        st.markdown("**當前聯邦政策：** 無")
 
-# 顯示行星關係
-st.markdown("#### 🤝 行星關係：")
-if len(galaxy.planets) > 1:
-    for p1 in galaxy.planets:
-        relations_str = []
-        for p2_name, status in p1.relations.items():
-            # 確保對方行星仍然存在且存活
-            if any(p.name == p2_name and p.is_alive for p in galaxy.planets):
-                war_status = " (戰爭中)" if p2_name in p1.war_with else ""
-                relations_str.append(f"{p2_name}: {status}{war_status}")
-        if relations_str:
-            st.write(f"- **{p1.name}** 與其他行星的關係: {', '.join(relations_str)}")
-        else:
-            st.write(f"- **{p1.name}** 目前沒有活躍的行星關係。")
-else:
-    st.info("星系中只有一個行星，沒有關係可顯示。")
+    # 顯示行星關係
+    st.markdown("#### 🤝 行星關係：")
+    if len(galaxy.planets) > 1:
+        for p1 in galaxy.planets:
+            relations_str = []
+            for p2_name, status in p1.relations.items():
+                # 確保對方行星仍然存在且存活
+                if any(p.name == p2_name and p.is_alive for p in galaxy.planets):
+                    war_status = " (戰爭中)" if p2_name in p1.war_with else ""
+                    relations_str.append(f"{p2_name}: {status}{war_status}")
+            if relations_str:
+                st.write(f"- **{p1.name}** 與其他行星的關係: {', '.join(relations_str)}")
+            else:
+                st.write(f"- **{p1.name}** 目前沒有活躍的行星關係。")
+    else:
+        st.info("星系中只有一個行星，沒有關係可顯示。")
 
-# 可視化地圖
+# 可視化地圖 (Plotly)
 st.markdown("#### 🗺️ 星系地圖：")
 if galaxy.planets:
-    max_x = max(pos[0] for pos in galaxy.map_layout.values()) + 2
-    max_y = max(pos[1] for pos in galaxy.map_layout.values()) + 2
-    
-    grid = [[' ' for _ in range(max_x)] for _ in range(max_y)]
-    planet_symbols = {}
-    
-    # 放置行星符號
-    for i, planet in enumerate(galaxy.planets):
-        x, y = galaxy.map_layout[planet.name]
-        symbol = '🪐' if not planet.alien else '👽'
-        grid[y][x] = symbol
-        planet_symbols[planet.name] = symbol
+    # 準備行星數據
+    planet_data = []
+    for planet in galaxy.planets:
+        x, y = galaxy.map_layout.get(planet.name, (0,0)) # 確保有位置
+        planet_data.append({
+            "name": planet.name,
+            "x": x,
+            "y": y,
+            "type": "外星行星" if planet.alien else "地球行星",
+            "tech": planet.tech,
+            "pollution": planet.pollution,
+            "conflict": planet.conflict_level,
+            "is_alive": planet.is_alive
+        })
+    df_planets = pd.DataFrame(planet_data)
 
-    # 繪製關係線 (簡化為橫向或縱向線)
+    # 準備關係線數據
+    lines_data = []
     for p1 in galaxy.planets:
         for p2_name, status in p1.relations.items():
             p2_obj = next((p for p in galaxy.planets if p.name == p2_name and p.is_alive), None)
-            if p2_obj and p1.name < p2_name: # 只繪製一次連接
-                x1, y1 = galaxy.map_layout[p1.name]
-                x2, y2 = galaxy.map_layout[p2_obj.name] # 使用 p2_obj.name 確保是已存在的行星
+            if p2_obj and p1.name < p2_name: # 避免重複繪製和已滅亡行星
+                x1, y1 = galaxy.map_layout.get(p1.name, (0,0))
+                x2, y2 = galaxy.map_layout.get(p2_obj.name, (0,0))
                 
-                line_char = '-' # 中立
+                line_color = 'grey' # Neutral
                 if status == "friendly":
-                    line_char = '=' # 友好
+                    line_color = 'green'
                 elif status == "hostile":
-                    line_char = 'X' # 敵對
+                    line_color = 'orange'
                 
-                if p2_name in p1.war_with: # 戰爭中覆蓋為 W
-                    line_char = 'W'
+                if p2_name in p1.war_with: # War overrides other statuses
+                    line_color = 'red'
 
-                # 簡單的直線連接
-                if x1 == x2: # 垂直線
-                    for y in range(min(y1, y2) + 1, max(y1, y2)):
-                        if grid[y][x1] == ' ': grid[y][x1] = '|' # 避免覆蓋行星
-                elif y1 == y2: # 水平線
-                    for x in range(min(x1, x2) + 1, max(x1, x2)):
-                        if grid[y1][x] == ' ': grid[y1][x] = line_char
-                # 對角線不處理，保持簡潔
+                lines_data.append({
+                    'x': [x1, x2, None], # None separates segments
+                    'y': [y1, y2, None],
+                    'color': line_color,
+                    'status': status,
+                    'war': 'Yes' if p2_name in p1.war_with else 'No'
+                })
 
-    map_str = "```\n"
-    for row in grid:
-        map_str += "".join(row) + "\n"
-    map_str += "```"
-    st.markdown(map_str)
-    st.markdown("圖例: 🪐=地球行星, 👽=外星行星, -=中立, ==友好, X=敵對, W=戰爭中")
+    fig_map = go.Figure()
+
+    # Add lines for relationships
+    for line in lines_data:
+        fig_map.add_trace(go.Scatter(
+            x=line['x'],
+            y=line['y'],
+            mode='lines',
+            line=dict(color=line['color'], width=2),
+            hoverinfo='text',
+            text=f"關係: {line['status']}<br>戰爭: {line['war']}",
+            showlegend=False
+        ))
+
+    # Add planet markers
+    fig_map.add_trace(go.Scatter(
+        x=df_planets["x"],
+        y=df_planets["y"],
+        mode='markers+text',
+        marker=dict(
+            size=20,
+            color=df_planets["type"].map({"地球行星": "blue", "外星行星": "purple"}),
+            symbol='circle',
+            line=dict(width=2, color='DarkSlateGrey')
+        ),
+        text=df_planets["name"],
+        textposition="top center",
+        hoverinfo='text',
+        texttemplate='%{text}',
+        hovertemplate="<b>%{text}</b><br>" +
+                      "類型: %{customdata[0]}<br>" +
+                      "科技: %{customdata[1]:.2f}<br>" +
+                      "污染: %{customdata[2]:.2f}<br>" +
+                      "衝突: %{customdata[3]:.2f}<extra></extra>",
+        customdata=df_planets[['type', 'tech', 'pollution', 'conflict']]
+    ))
+
+    fig_map.update_layout(
+        title='星系地圖',
+        xaxis=dict(showgrid=False, zeroline=False, visible=False),
+        yaxis=dict(showgrid=False, zeroline=False, visible=False),
+        height=400,
+        showlegend=False,
+        plot_bgcolor='rgba(0,0,0,0)', # 透明背景
+        paper_bgcolor='rgba(0,0,0,0)' # 透明背景
+    )
+    st.plotly_chart(fig_map, use_container_width=True)
+    st.markdown("圖例: 🔵=地球行星, 🟣=外星行星, 灰色線=中立, 綠色線=友好, 橙色線=敵對, 紅色線=戰爭中")
 else:
     st.info("星系中沒有行星可供顯示地圖。")
 
@@ -984,74 +1145,94 @@ for planet in galaxy.planets:
     for city in planet.cities:
         if city.name == selected_city:
             found_city = True
-            st.markdown(f"### 📊 **{city.name}** 資訊")
-            st.write(f"**人口：** {len(city.citizens)} (出生 {city.birth_count} / 死亡 {city.death_count} / 遷入 {city.immigration_count} / 遷出 {city.emigration_count})")
-            st.write(f"**資源：** 糧食: {city.resources['糧食']}｜能源: {city.resources['能源']}｜稅收: {city.resources['稅收']}")
-            st.write(f"**群眾運動狀態：** {'活躍中' if city.mass_movement_active else '平靜'}")
-            st.write(f"**合作經濟水平：** {city.cooperative_economy_level:.2f}") # 顯示合作經濟水平
-            st.write(f"**政體：** {city.government_type}") # 顯示政體
+            with st.container(): # 使用容器來應用卡片樣式
+                st.markdown(f"### 📊 **{city.name}** 資訊")
+                st.write(f"**人口：** {len(city.citizens)} (出生 {city.birth_count} / 死亡 {city.death_count} / 遷入 {city.immigration_count} / 遷出 {city.emigration_count})")
+                st.write(f"**資源：** 糧食: {city.resources['糧食']}｜能源: {city.resources['能源']}｜稅收: {city.resources['稅收']}")
+                st.write(f"**群眾運動狀態：** {'活躍中' if city.mass_movement_active else '平靜'}")
+                st.write(f"**合作經濟水平：** {city.cooperative_economy_level:.2f}") # 顯示合作經濟水平
+                st.write(f"**政體：** {city.government_type}") # 顯示政體
 
-            # 歷史趨勢圖 (Plotly)
-            st.markdown("#### 📈 歷史趨勢：")
-            if city.history:
-                history_df = pd.DataFrame(city.history, columns=["年份", "平均健康", "平均信任"])
-                fig_history = go.Figure()
-                fig_history.add_trace(go.Scatter(x=history_df["年份"], y=history_df["平均健康"], mode='lines+markers', name='平均健康'))
-                fig_history.add_trace(go.Scatter(x=history_df["年份"], y=history_df["平均信任"], mode='lines+markers', name='平均信任'))
-                fig_history.update_layout(title_text=f"{city.name} 平均健康與信任趨勢")
-                st.plotly_chart(fig_history, use_container_width=True)
-            else:
-                st.info("該城市尚無歷史數據可供繪製圖表。")
+                # 城市投資功能
+                st.markdown("#### 💰 城市管理：")
+                if st.button(f"投資 {city.name} (花費 50 稅收)"):
+                    investment_cost = 50
+                    if city.resources["稅收"] >= investment_cost:
+                        city.resources["稅收"] -= investment_cost
+                        city.resources["糧食"] += 30
+                        city.resources["能源"] += 15
+                        for citizen in city.citizens:
+                            if citizen.alive:
+                                citizen.health = min(1.0, citizen.health + 0.05) # 提升健康
+                                citizen.trust = min(1.0, citizen.trust + 0.03) # 提升信任
+                        city.events.append(f"{galaxy.year} 年：💸 對 {city.name} 進行了投資，資源和市民福祉得到提升！")
+                        current_year_global_events.append(f"{galaxy.year} 年：💸 對 {city.name} 進行了投資，資源和市民福祉得到提升！")
+                        st.success(f"成功投資 {city.name}！")
+                        st.rerun() # 重新運行以更新數據
+                    else:
+                        st.warning(f"{city.name} 稅收不足，無法投資！需要 {investment_cost} 稅收。")
 
-            # 思想派別分布 (Plotly)
-            st.markdown("#### 🧠 思想派別分布：")
-            ideology_count = {}
-            for c in city.citizens:
-                if c.alive:
-                    ideology_count[c.ideology] = ideology_count.get(c.ideology, 0) + 1
-            if ideology_count:
-                ideology_df = pd.DataFrame(list(ideology_count.items()), columns=['思想派別', '人數'])
-                fig_ideology = px.bar(ideology_df, x='思想派別', y='人數', title=f"{city.name} 思想派別分布")
-                st.plotly_chart(fig_ideology, use_container_width=True)
-            else:
-                st.info("該城市目前沒有活著的市民。")
+                # 歷史趨勢圖 (Plotly)
+                st.markdown("#### 📈 歷史趨勢：")
+                if city.history:
+                    history_df = pd.DataFrame(city.history, columns=["年份", "平均健康", "平均信任"])
+                    fig_history = go.Figure()
+                    fig_history.add_trace(go.Scatter(x=history_df["年份"], y=history_df["平均健康"], mode='lines+markers', name='平均健康'))
+                    fig_history.add_trace(go.Scatter(x=history_df["年份"], y=history_df["平均信任"], mode='lines+markers', name='平均信任'))
+                    fig_history.update_layout(title_text=f"{city.name} 平均健康與信任趨勢")
+                    st.plotly_chart(fig_history, use_container_width=True)
+                else:
+                    st.info("該城市尚無歷史數據可供繪製圖表。")
 
-            # 死亡原因分析 (Plotly)
-            st.markdown("#### 💀 死亡原因分析：")
-            death_causes = [item[3] for item in city.graveyard if item[3] is not None]
-            if death_causes:
-                death_cause_counts = pd.Series(death_causes).value_counts()
-                death_cause_df = pd.DataFrame({'死因': death_cause_counts.index, '人數': death_cause_counts.values})
-                fig_death = px.bar(death_cause_df, x='死因', y='人數', title=f"{city.name} 死亡原因分析")
-                st.plotly_chart(fig_death, use_container_width=True)
-            else:
-                st.info("墓園中沒有死亡原因記錄。")
+                # 思想派別分布 (Plotly)
+                st.markdown("#### 🧠 思想派別分布：")
+                ideology_count = {}
+                for c in city.citizens:
+                    if c.alive:
+                        ideology_count[c.ideology] = ideology_count.get(c.ideology, 0) + 1
+                if ideology_count:
+                    ideology_df = pd.DataFrame(list(ideology_count.items()), columns=['思想派別', '人數'])
+                    fig_ideology = px.bar(ideology_df, x='思想派別', y='人數', title=f"{city.name} 思想派別分布")
+                    st.plotly_chart(fig_ideology, use_container_width=True)
+                else:
+                    st.info("該城市目前沒有活著的市民。")
 
-            # 最近事件
-            st.markdown("#### 📰 最近事件：")
-            if city.events:
-                for evt in city.events[::-1]:
-                    st.write(f"- {evt}")
-            else:
-                st.info("本年度沒有新事件發生。")
+                # 死亡原因分析 (Plotly)
+                st.markdown("#### 💀 死亡原因分析：")
+                death_causes = [item[3] for item in city.graveyard if item[3] is not None]
+                if death_causes:
+                    death_cause_counts = pd.Series(death_causes).value_counts()
+                    death_cause_df = pd.DataFrame({'死因': death_cause_counts.index, '人數': death_cause_counts.values})
+                    fig_death = px.bar(death_cause_df, x='死因', y='人數', title=f"{city.name} 死亡原因分析")
+                    st.plotly_chart(fig_death, use_container_width=True)
+                else:
+                    st.info("墓園中沒有死亡原因記錄。")
 
-            # 墓園紀錄
-            st.markdown("#### 🪦 墓園紀錄：")
-            if city.graveyard:
-                for name, age, ideology, cause in city.graveyard[-5:][::-1]:
-                    st.write(f"- {name} (享年 {age} 歲，生前信仰：{ideology}，死因：{cause if cause else '未知'})")
-            else:
-                st.info("墓園目前沒有記錄。")
-            
-            # 顯示部分市民詳細資訊
-            st.markdown("#### 👤 部分市民詳細資訊：")
-            if city.citizens:
-                sample_citizens = random.sample([c for c in city.citizens if c.alive], min(5, len(city.citizens)))
-                for c in sample_citizens:
-                    partner_info = f"配偶: {c.partner.name}" if c.partner else "單身"
-                    st.write(f"- **{c.name}**: 年齡 {c.age}, 健康 {c.health:.2f}, 信任 {c.trust:.2f}, 思想 {c.ideology}, 職業 {c.profession}, 教育 {c.education_level}, 財富 {c.wealth:.2f}, {partner_info}")
-            else:
-                st.info("該城市目前沒有活著的市民。")
+                # 最近事件
+                st.markdown("#### 📰 最近事件：")
+                if city.events:
+                    for evt in city.events[::-1]:
+                        st.write(f"- {evt}")
+                else:
+                    st.info("本年度沒有新事件發生。")
+
+                # 墓園紀錄
+                st.markdown("#### 🪦 墓園紀錄：")
+                if city.graveyard:
+                    for name, age, ideology, cause in city.graveyard[-5:][::-1]:
+                        st.write(f"- {name} (享年 {age} 歲，生前信仰：{ideology}，死因：{cause if cause else '未知'})")
+                else:
+                    st.info("墓園目前沒有記錄。")
+                
+                # 顯示部分市民詳細資訊
+                st.markdown("#### 👤 部分市民詳細資訊：")
+                if city.citizens:
+                    sample_citizens = random.sample([c for c in city.citizens if c.alive], min(5, len(city.citizens)))
+                    for c in sample_citizens:
+                        partner_info = f"配偶: {c.partner.name}" if c.partner else "單身"
+                        st.write(f"- **{c.name}**: 年齡 {c.age}, 健康 {c.health:.2f}, 信任 {c.trust:.2f}, 思想 {c.ideology}, 職業 {c.profession}, 教育 {c.education_level}, 財富 {c.wealth:.2f}, {partner_info}")
+                else:
+                    st.info("該城市目前沒有活著的市民。")
 
             break
     if found_city:
@@ -1062,53 +1243,53 @@ if not found_city and selected_city:
 
 st.markdown("---") # 分隔線
 st.markdown("## 📊 跨城市數據對比") # 新增跨城市對比區塊
-all_city_data = []
-for planet in galaxy.planets:
-    for city in planet.cities:
-        alive_citizens = [c for c in city.citizens if c.alive]
-        avg_health = sum(c.health for c in alive_citizens) / max(1, len(alive_citizens)) if alive_citizens else 0
-        avg_trust = sum(c.trust for c in alive_citizens) / max(1, len(alive_citizens)) if alive_citizens else 0
-        
-        all_city_data.append({
-            "行星": planet.name,
-            "城市": city.name,
-            "人口": len(city.citizens),
-            "平均健康": f"{avg_health:.2f}",
-            "平均信任": f"{avg_trust:.2f}",
-            "糧食": city.resources['糧食'],
-            "能源": city.resources['能源'],
-            "稅收": city.resources['稅收'],
-            "科技": f"{planet.tech:.2f}",
-            "污染": f"{planet.pollution:.2f}",
-            "衝突等級": f"{planet.conflict_level:.2f}",
-            "群眾運動": '是' if city.mass_movement_active else '否',
-            "合作經濟": f"{city.cooperative_economy_level:.2f}", # 顯示合作經濟水平
-            "政體": city.government_type # 顯示政體
-        })
+with st.container(): # 使用容器來應用卡片樣式
+    all_city_data = []
+    for planet in galaxy.planets:
+        for city in planet.cities:
+            alive_citizens = [c for c in city.citizens if c.alive]
+            avg_health = sum(c.health for c in alive_citizens) / max(1, len(alive_citizens)) if alive_citizens else 0
+            avg_trust = sum(c.trust for c in alive_citizens) / max(1, len(alive_citizens)) if alive_citizens else 0
+            
+            all_city_data.append({
+                "行星": planet.name,
+                "城市": city.name,
+                "人口": len(city.citizens),
+                "平均健康": f"{avg_health:.2f}",
+                "平均信任": f"{avg_trust:.2f}",
+                "糧食": city.resources['糧食'],
+                "能源": city.resources['能源'],
+                "稅收": city.resources['稅收'],
+                "科技": f"{planet.tech:.2f}",
+                "污染": f"{planet.pollution:.2f}",
+                "衝突等級": f"{planet.conflict_level:.2f}",
+                "群眾運動": '是' if city.mass_movement_active else '否',
+                "合作經濟": f"{city.cooperative_economy_level:.2f}", # 顯示合作經濟水平
+                "政體": city.government_type # 顯示政體
+            })
 
-if all_city_data:
-    df_cities = pd.DataFrame(all_city_data)
-    st.dataframe(df_cities.set_index("城市"))
-else:
-    st.info("目前沒有城市數據可供對比。")
+    if all_city_data:
+        df_cities = pd.DataFrame(all_city_data)
+        st.dataframe(df_cities.set_index("城市"))
+    else:
+        st.info("目前沒有城市數據可供對比。")
 
 
 st.markdown("---") # 分隔線
 st.markdown("## 🗞️ 未來之城日報")
-if galaxy.global_events_log:
-    # 獲取最新一年的日報
-    # 為了讓日報更易讀，我們只顯示最近的 50 年的日報，並提供一個展開器
-    st.markdown("點擊年份查看當年度事件：")
-    # 從最新的年份開始顯示
-    for report_entry in reversed(galaxy.global_events_log[-50:]): # 只顯示最近 50 年
-        with st.expander(f"**{report_entry['year']} 年年度報告**"):
-            if report_entry['events']:
-                for evt in report_entry['events']:
-                    st.write(f"- {evt}")
-            else:
-                st.info(f"{report_entry['year']} 年全球風平浪靜，沒有重大事件發生。")
-else:
-    st.info("目前還沒有未來之城日報的記錄。")
+with st.container(): # 使用容器來應用卡片樣式
+    if galaxy.global_events_log:
+        st.markdown("點擊年份查看當年度事件：")
+        # 從最新的年份開始顯示，只顯示最近 50 年
+        for report_entry in reversed(galaxy.global_events_log[-50:]): 
+            with st.expander(f"**{report_entry['year']} 年年度報告**"):
+                if report_entry['events']:
+                    for evt in report_entry['events']:
+                        st.write(f"- {evt}")
+                else:
+                    st.info(f"{report_entry['year']} 年全球風平浪靜，沒有重大事件發生。")
+    else:
+        st.info("目前還沒有未來之城日報的記錄。")
 
 st.markdown("---") # 分隔線
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
