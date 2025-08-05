@@ -37,7 +37,7 @@ st.markdown("""
     }
     div.stButton > button:first-child:hover {
         background-color: #45a049; /* 深綠色 */
-        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
+        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
         transform: translateY(-2px);
     }
 
@@ -870,7 +870,7 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
                 eligible_high_professions = ["科學家", "醫生", "工程師"]
                 if citizen.profession not in eligible_high_professions and random.random() < 0.3: # 30% 機率轉為高階職業
                     citizen.profession = random.choice(eligible_high_professions)
-                    event_msg = f"{galaxy.year} 年：🎓 {citizen.name} 晉升為 {citizen.profession}！"
+                    event_msg = f"{galaxy.year} 年：� {citizen.name} 晉升為 {citizen.profession}！"
                     city.events.append(event_msg)
                     current_year_global_events.append(event_msg)
             elif citizen.education_level == 2: # 中等教育
@@ -1624,8 +1624,14 @@ for planet in galaxy.planets:
                                 citizen.health = min(1.0, citizen.health + 0.05) # 提升健康
                                 citizen.trust = min(1.0, citizen.trust + 0.03) # 提升信任
                                 citizen.happiness = min(1.0, citizen.happiness + 0.05) # 提升快樂度
-                        city.events.append(f"{galaxy.year} 年：💸 對 {city.name} 進行了投資，資源和市民福祉得到提升！")
-                        current_year_global_events.append(f"{galaxy.year} 年：💸 對 {city.name} 進行了投資，資源和市民福祉得到提升！")
+                        
+                        # 直接將事件添加到全局日誌
+                        event_msg = f"{galaxy.year} 年：💸 對 {city.name} 進行了投資，資源和市民福祉得到提升！"
+                        if galaxy.global_events_log and galaxy.global_events_log[-1]["year"] == galaxy.year:
+                            galaxy.global_events_log[-1]["events"].append(event_msg)
+                        else:
+                            galaxy.global_events_log.append({"year": galaxy.year, "events": [event_msg]})
+
                         st.success(f"成功投資 {city.name}！")
                         st.rerun() # 重新運行以更新數據
                     else:
@@ -1760,3 +1766,4 @@ with st.container(): # 使用容器來應用卡片樣式
 
 st.markdown("---") # 分隔線
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
+�
