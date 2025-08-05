@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # 📡 升級版 Citysim Streamlit UI（滑桿模擬年數 + 城市選擇 + 統計顯示 + 生育/疾病/戰爭/科技/污染 + 稅收/移民/墓園/思想派別/新聞）
 import streamlit as st
 import random
@@ -585,7 +586,7 @@ if simulate_step_button:
             if random.random() < 0.05:
                 city.cooperative_economy_level = min(1.0, city.cooperative_economy_level + random.uniform(0.01, 0.05))
                 if city.cooperative_economy_level > 0.5 and random.random() < 0.01:
-                    event_msg = f"{galaxy.year} 年：🌱 {city.name} 的合作經濟蓬勃發展！"
+                    event_msg = f"{galaxy.year} 年：� {city.name} 的合作經濟蓬勃發展！"
                     city.events.append(event_msg)
                     current_year_global_events.append(event_msg)
             else:
@@ -868,7 +869,7 @@ if simulate_step_button:
         # 行星滅亡判斷 (移除地球永存邏輯)
         if all(len(c.citizens) == 0 for c in planet.cities):
             planet.is_alive = False
-            event_msg = f"{galaxy.year} 年：� 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！"
+            event_msg = f"{galaxy.year} 年：💥 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！"
             current_year_global_events.append(event_msg)
 
     # 清理已滅亡的行星
