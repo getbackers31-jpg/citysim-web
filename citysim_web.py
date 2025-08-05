@@ -586,7 +586,7 @@ if simulate_step_button:
             if random.random() < 0.05:
                 city.cooperative_economy_level = min(1.0, city.cooperative_economy_level + random.uniform(0.01, 0.05))
                 if city.cooperative_economy_level > 0.5 and random.random() < 0.01:
-                    event_msg = f"{galaxy.year} 年：� {city.name} 的合作經濟蓬勃發展！"
+                    event_msg = f"{galaxy.year} 年：🌱 {city.name} 的合作經濟蓬勃發展！"
                     city.events.append(event_msg)
                     current_year_global_events.append(event_msg)
             else:
@@ -1112,4 +1112,3 @@ else:
 
 st.markdown("---") # 分隔線
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
-�
