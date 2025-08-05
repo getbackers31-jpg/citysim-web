@@ -509,7 +509,7 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             if relation_status != "hostile": # 如果還不是敵對，則轉為敵對
                 planet.relations[other_planet_name] = "hostile"
                 other_planet_obj.relations[planet.name] = "hostile"
-                current_year_global_events.append(f"{galaxy.year} 年：� {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！")
+                current_year_global_events.append(f"{galaxy.year} 年：💥 {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！")
             
             # 如果衝突等級非常高且關係敵對，則宣戰
             if planet.conflict_level > 0.7 and other_planet_obj.conflict_level > 0.7 and planet.relations[other_planet_name] == "hostile":
@@ -1760,4 +1760,3 @@ with st.container(): # 使用容器來應用卡片樣式
 
 st.markdown("---") # 分隔線
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
-�
