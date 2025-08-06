@@ -37,7 +37,7 @@ st.markdown("""
     }
     div.stButton > button:first-child:hover {
         background-color: #45a049; /* 深綠色 */
-        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
+        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
         transform: translateY(-2px);
     }
 
@@ -359,7 +359,8 @@ def initialize_galaxy():
         "賽博星": (5, 2)
     }
 
-    new_galaxy.prev_total_population = sum(len(city.citizens) for planet in new_galaxy.planets for city in new_galaxy.cities)
+    # 修正這一行：遍歷 new_galaxy.planets 中的每個 planet，然後再遍歷 planet.cities
+    new_galaxy.prev_total_population = sum(len(city.citizens) for planet in new_galaxy.planets for city in planet.cities)
 
     return new_galaxy
 
@@ -469,8 +470,8 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
                 f"服務員 {story_citizen.name} (來自 {story_citizen.city}) 以其熱情周到的服務贏得了市民的廣泛讚譽。",
                 f"小偷 {story_citizen.name} (來自 {story_citizen.city}) 在一次行動中失手被捕，被關押了一段時間。",
                 f"黑幫成員 {story_citizen.name} (來自 {story_citizen.city}) 在一次幫派衝突中受傷，健康狀況惡化。",
-                f"詐騙犯 {story_citizen.name} (來自 {story_citizen.city}) 成功策劃了一場大型騙局，獲得了巨額財富。",
-                f"毒販 {story_citizen.name} (來自 {story_citizen.city}) 的毒品交易被聯邦特工發現，面臨嚴峻的法律制裁。"
+                f"詐騙犯 {story_citizen.name} (來自 {city.name}) 成功策劃了一場大型騙局，獲得了巨額財富。",
+                f"毒販 {story_citizen.name} (來自 {city.name}) 的毒品交易被聯邦特工發現，面臨嚴峻的法律制裁。"
             ]
             _log_global_event(galaxy, f"{galaxy.year} 年：✨ {random.choice(story_templates)}")
 
@@ -501,7 +502,7 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             new_planet.relations[p.name] = "neutral"
         
         galaxy.planets.append(new_planet)
-        _log_global_event(galaxy, f"{galaxy.year} 年：🔭 探測器發現了新的宜居行星 **{new_planet_name}**，並迅速建立了 {num_new_cities} 個定居點！")
+        _log_global_event(galaxy, f"{galaxy.year} 年：� 探測器發現了新的宜居行星 **{new_planet_name}**，並迅速建立了 {num_new_cities} 個定居點！")
         
         existing_coords = set(galaxy.map_layout.values())
         new_x, new_y = 0, 0
@@ -1177,7 +1178,7 @@ def simulate_year(galaxy):
         
         if all(not c.citizens for c in planet.cities): # Check if all cities on planet have no citizens left
             planet.is_alive = False
-            _log_global_event(galaxy, f"{galaxy.year} 年：� 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！這片土地成為了歷史。")
+            _log_global_event(galaxy, f"{galaxy.year} 年：💥 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！這片土地成為了歷史。")
             for p in galaxy.planets:
                 p.active_treaties = [t for t in p.active_treaties if planet.name not in t.signatories]
 
