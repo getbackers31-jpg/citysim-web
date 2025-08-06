@@ -37,7 +37,7 @@ st.markdown("""
     }
     div.stButton > button:first-child:hover {
         background-color: #45a049; /* 深綠色 */
-        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
+        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
         transform: translateY(-2px);
     }
 
@@ -97,9 +97,69 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 定義資料結構 ---
+
+# 新增 Family 類別
+class Family:
+    """代表一個家族，包含其成員、財富和聲望。"""
+    def __init__(self, name):
+        self.name = name
+        self.members = [] # 儲存 Citizen 物件的引用
+        self.family_wealth = 0
+        self.reputation = random.uniform(0.1, 0.5) # 家族聲望，0-1.0
+
+    def update_reputation(self):
+        """根據家族成員的職業和財富更新聲望。"""
+        total_member_wealth = sum(c.wealth for c in self.members if c.alive)
+        active_members_count = len([c for c in self.members if c.alive])
+        
+        if active_members_count > 0:
+            avg_member_wealth = total_member_wealth / active_members_count
+            # 聲望受平均財富影響
+            self.reputation = max(0.1, min(1.0, self.reputation + (avg_member_wealth - 100) * 0.0005)) # 基礎值100
+        
+        # 聲望受成員職業影響
+        for member in self.members:
+            if member.alive:
+                if member.profession in ["科學家", "醫生", "工程師", "教師"]:
+                    self.reputation = min(1.0, self.reputation + 0.005)
+                elif member.profession in ["小偷", "黑幫成員", "詐騙犯", "毒販"]:
+                    self.reputation = max(0.01, self.reputation - 0.01) # 犯罪職業降低聲望
+
+        self.reputation = max(0.01, min(1.0, self.reputation)) # 限制聲望範圍
+
+# 新增 PoliticalParty 類別
+class PoliticalParty:
+    """代表一個政黨，包含其名稱、主要思想、政策主張和支持度。"""
+    def __init__(self, name, ideology, platform):
+        self.name = name
+        self.ideology = ideology # 主要思想 (如 "保守", "自由")
+        self.platform = platform # 政策主張 (如 "發展經濟", "保護環境")
+        self.support = 0 # 支持度 (基於市民數量)
+        self.leader = None # 政黨領袖 (Citizen 物件)
+
+    def calculate_support(self, citizens):
+        """根據市民的思想傾向和快樂度計算政黨支持度。"""
+        self.support = 0
+        eligible_citizens = [c for c in citizens if c.alive]
+        if not eligible_citizens:
+            return
+
+        for citizen in eligible_citizens:
+            # 如果市民思想與政黨思想一致，則增加支持度
+            if citizen.ideology == self.ideology:
+                self.support += 1
+            # 快樂度也會影響支持度，快樂度越高越可能支持現有或穩定政黨
+            if citizen.happiness > 0.7 and self.platform == "穩定發展":
+                self.support += 0.5
+            elif citizen.happiness < 0.3 and self.platform == "改革求變":
+                self.support += 0.5
+        
+        # 確保支持度不會超過總人口
+        self.support = min(self.support, len(eligible_citizens))
+
 class Citizen:
     """代表城市中的一個市民。"""
-    def __init__(self, name, parent1_ideology=None, parent2_ideology=None, parent1_trust=None, parent2_trust=None, parent1_emotion=None, parent2_emotion=None):
+    def __init__(self, name, parent1_ideology=None, parent2_ideology=None, parent1_trust=None, parent2_trust=None, parent1_emotion=None, parent2_emotion=None, family=None):
         self.name = name
         self.age = 0 # 新生兒年齡從0開始
         self.health = 1.0 # 健康值，1.0 為滿血
@@ -118,7 +178,15 @@ class Citizen:
             self.happiness = random.uniform(0.4, 0.9) # 預設值
 
         if parent1_ideology and parent2_ideology and random.random() < 0.7: # 70% 機率繼承父母之一的思想
-            self.ideology = random.choice([parent1_ideology, parent2_ideology])
+            self.ideology = random.choice(["保守", "自由", "科技信仰", "民族主義"]) # 預設值或隨機
+            # 優先繼承父母的思想，如果父母思想相同，機率更高
+            if parent1_ideology == parent2_ideology:
+                if random.random() < 0.9: # 90% 機率繼承相同思想
+                    self.ideology = parent1_ideology
+            elif random.random() < 0.7: # 70% 機率繼承其中一個
+                self.ideology = random.choice([parent1_ideology, parent2_ideology])
+            else: # 30% 機率產生新思想
+                self.ideology = random.choice(["保守", "自由", "科技信仰", "民族主義"])
         else:
             self.ideology = random.choice(["保守", "自由", "科技信仰", "民族主義"]) # 預設值或隨機
 
@@ -126,6 +194,7 @@ class Citizen:
         self.alive = True # 是否存活
         self.death_cause = None # 死亡原因
         self.partner = None # 配偶對象 (Citizen 物件)
+        self.family = family # 所屬家族 (Family 物件)
 
         # 新增市民屬性 (職業/教育/財富)
         # 增加更多職業，包括高風險職業
@@ -162,6 +231,9 @@ class City:
         # 新增城市產業專精
         self.specialization = random.choice(["農業", "工業", "科技", "服務", "軍事"])
         self.resource_shortage_years = 0 # 記錄糧食短缺的年數，用於觸發饑荒
+        self.political_parties = [] # 城市中的政黨列表
+        self.ruling_party = None # 當前執政黨
+        self.election_timer = random.randint(1, 5) # 距離下次選舉的年數
 
 class Planet:
     """代表一個行星及其上的城市。"""
@@ -184,6 +256,16 @@ class Planet:
         self.shield_active = False # 行星護盾是否活躍
         self.allies = set() # 結盟的行星名稱集合
         self.attack_cooldown = 0 # 攻擊冷卻時間
+        self.active_treaties = [] # 活躍的條約列表 (儲存 Treaty 物件)
+        self.unlocked_tech_breakthroughs = [] # 已解鎖的科技突破列表
+
+class Treaty:
+    """代表行星間的條約。"""
+    def __init__(self, treaty_type, signatories, duration, effects=None):
+        self.type = treaty_type # "非侵略", "貿易", "科技共享", "和平"
+        self.signatories = sorted(signatories) # 參與方行星名稱列表
+        self.duration = duration # 持續年數
+        self.effects = effects if effects else {} # 條約具體效果 (e.g., {"trade_bonus": 0.1})
 
 class Galaxy:
     """代表整個星系，包含所有行星和年份。"""
@@ -195,28 +277,77 @@ class Galaxy:
         self.active_federation_policy = None # 當前生效的聯邦政策 (字典: {"type": "科技", "duration": 5, "effect": 0.02})
         self.policy_duration_left = 0 # 政策剩餘生效年數
         self.map_layout = {} # 新增：用於可視化地圖的行星位置 {planet_name: (x, y)}
+        self.families = {} # 星系中的所有家族 {family_name: Family_obj}
+
+# --- 科技突破定義 (全局常量) ---
+TECH_BREAKTHROUGHS = {
+    "醫療": [
+        {"threshold": 0.6, "name": "超級疫苗", "effect_desc": "疫情爆發機率降低50%，疫情嚴重程度降低30%。", "effect": {"epidemic_chance_mult": 0.5, "epidemic_severity_mult": 0.7}},
+        {"threshold": 0.8, "name": "再生醫學", "effect_desc": "市民健康恢復速度提升，平均壽命增加5年。", "effect": {"health_recovery_bonus": 0.05, "lifespan_bonus": 5}},
+        {"threshold": 1.0, "name": "永生技術", "effect_desc": "市民自然死亡率大幅降低，健康幾乎不會因年齡下降。", "effect": {"natural_death_reduction": 0.8}}
+    ],
+    "環境": [
+        {"threshold": 0.6, "name": "大氣淨化器", "effect_desc": "污染積累速度降低40%。", "effect": {"pollution_growth_mult": 0.6}},
+        {"threshold": 0.8, "name": "生態修復技術", "effect_desc": "每年自動淨化部分污染，市民快樂度略微提升。", "effect": {"pollution_cleanup": 0.05, "happiness_bonus": 0.01}},
+        {"threshold": 1.0, "name": "生態平衡系統", "effect_desc": "行星污染自動歸零，市民健康和快樂度大幅提升。", "effect": {"pollution_reset": True}}
+    ],
+    "軍事": [
+        {"threshold": 0.6, "name": "軌道防禦平台", "effect_desc": "行星防禦等級上限提升20，攻擊冷卻時間減少1年。", "effect": {"defense_cap_bonus": 20, "attack_cooldown_reduction": 1}},
+        {"threshold": 0.8, "name": "超光速武器", "effect_desc": "攻擊傷害提升20%，戰爭勝利機率增加。", "effect": {"attack_damage_bonus": 0.2, "war_win_chance_bonus": 0.1}},
+        {"threshold": 1.0, "name": "末日武器", "effect_desc": "可發動毀滅性攻擊，有機會直接消滅目標行星。", "effect": {"doomsday_weapon_unlocked": True}}
+    ],
+    "生產": [
+        {"threshold": 0.6, "name": "自動化工廠", "effect_desc": "所有城市資源生產效率提升30%。", "effect": {"resource_production_bonus": 0.3}},
+        {"threshold": 0.8, "name": "奈米製造", "effect_desc": "市民財富增長速度提升，資源消耗略微降低。", "effect": {"wealth_growth_bonus": 0.1, "resource_consumption_reduction": 0.05}},
+        {"threshold": 1.0, "name": "資源複製器", "effect_desc": "糧食和能源資源不再消耗，每年度自動補充。", "effect": {"resource_infinite": True}}
+    ]
+}
 
 # --- 初始化世界 ---
 @st.cache_resource # 使用 Streamlit 緩存資源，避免每次運行都重新初始化
 def initialize_galaxy():
     """初始化星系、行星和城市數據。"""
     new_galaxy = Galaxy()
+    
+    # 初始化家族
+    new_galaxy.families["王家"] = Family("王家")
+    new_galaxy.families["李家"] = Family("李家")
+    new_galaxy.families["張家"] = Family("張家")
+
     earth = Planet("地球") 
     for cname in ["臺北", "東京", "首爾"]:
         city = City(cname)
-        city.citizens = [Citizen(f"{cname}市民#{i+1}") for i in range(30)]
-        for c in city.citizens:
-            c.city = cname
+        # 初始化政黨
+        city.political_parties.append(PoliticalParty("統一黨", "保守", "穩定發展"))
+        city.political_parties.append(PoliticalParty("改革黨", "自由", "改革求變"))
+        city.political_parties.append(PoliticalParty("科技黨", "科技信仰", "加速科技"))
+        city.political_parties.append(PoliticalParty("民族黨", "民族主義", "民族復興"))
+        city.ruling_party = random.choice(city.political_parties) # 初始隨機執政黨
+
+        for i in range(30):
+            # 讓市民加入現有家族
+            initial_family = random.choice(list(new_galaxy.families.values()))
+            citizen = Citizen(f"{cname}市民#{i+1}", family=initial_family)
+            citizen.city = cname
+            initial_family.members.append(citizen)
+            city.citizens.append(citizen)
         earth.cities.append(city)
     new_galaxy.planets.append(earth)
 
     alien = Planet("賽博星", alien=True)
     for cname in ["艾諾斯", "特朗加"]:
         city = City(cname)
-        city.citizens = [Citizen(f"{cname}市民#{i+1}") for i in range(20)]
-        for c in city.citizens:
-            c.city = cname
-        alien.cities.append(city)
+        # 外星城市也有政黨
+        city.political_parties.append(PoliticalParty("星際聯盟", "科技信仰", "星際擴張"))
+        city.political_parties.append(PoliticalParty("原初信仰", "保守", "回歸本源"))
+        city.ruling_party = random.choice(city.political_parties)
+
+        for i in range(20):
+            initial_family = random.choice(list(new_galaxy.families.values()))
+            citizen = Citizen(f"{cname}市民#{i+1}", family=initial_family)
+            citizen.city = cname
+            initial_family.members.append(citizen)
+            city.citizens.append(citizen)
     new_galaxy.planets.append(alien)
 
     # 初始化行星間關係
@@ -237,6 +368,103 @@ def initialize_galaxy():
 if 'galaxy' not in st.session_state:
     st.session_state.galaxy = initialize_galaxy()
 galaxy = st.session_state.galaxy # 從 session_state 獲取星系對象
+
+# --- 事件觸發函數 (供手動和隨機呼叫) ---
+def trigger_revolution(city_obj, current_year_global_events):
+    """觸發城市革命。"""
+    if not city_obj.citizens:
+        return f"{city_obj.name} 沒有市民，無法觸發革命。"
+
+    rebellion_msg = f"{galaxy.year} 年：🔥 **{city_obj.name}** 爆發了大規模叛亂！政體可能改變！"
+    city_obj.events.append(rebellion_msg)
+    current_year_global_events.append(rebellion_msg)
+
+    alive_citizens_for_stats = [c for c in city_obj.citizens if c.alive]
+    rebellion_death_count = int(len(alive_citizens_for_stats) * random.uniform(0.05, 0.15))
+    for _ in range(rebellion_death_count):
+        if alive_citizens_for_stats:
+            victim = random.choice(alive_citizens_for_stats)
+            victim.alive = False
+            victim.death_cause = "叛亂"
+            city_obj.death_count += 1
+            city_obj.graveyard.append((victim.name, victim.age, victim.ideology, victim.death_cause))
+            alive_citizens_for_stats.remove(victim)
+    
+    city_obj.resources["糧食"] = max(0, city_obj.resources["糧食"] - random.uniform(50, 100))
+    city_obj.resources["能源"] = max(0, city_obj.resources["能源"] - random.uniform(30, 70))
+
+    # 政體可能改變
+    old_government_type = city_obj.government_type
+    if city_obj.government_type == "專制":
+        city_obj.government_type = random.choice(["民主制", "共和制"])
+    elif city_obj.government_type == "民主制":
+        city_obj.government_type = "專制"
+    elif city_obj.government_type == "共和制":
+        city_obj.government_type = random.choice(["專制", "民主制"])
+    
+    current_year_global_events.append(f"{galaxy.year} 年：政體在叛亂中從 **{old_government_type}** 變為 **{city_obj.government_type}**！")
+    city_obj.mass_movement_active = False # 叛亂結束，運動平息
+    return f"成功觸發 {city_obj.name} 的革命！"
+
+def trigger_epidemic(planet_obj, current_year_global_events):
+    """觸發行星疫情。"""
+    if planet_obj.epidemic_active:
+        return f"{planet_obj.name} 已經有疫情活躍中。"
+    
+    planet_obj.epidemic_active = True
+    planet_obj.epidemic_severity = random.uniform(0.1, 0.5) * (1 - planet_obj.tech_levels["醫療"] * 0.5)
+    epidemic_msg = f"{galaxy.year} 年：🦠 **{planet_obj.name}** 爆發了嚴重的疫情！"
+    for city in planet_obj.cities: city.events.append(epidemic_msg)
+    current_year_global_events.append(epidemic_msg)
+    return f"成功觸發 {planet_obj.name} 的疫情！"
+
+def trigger_coup(city_obj, current_year_global_events):
+    """觸發城市政變。"""
+    if not city_obj.citizens:
+        return f"{city_obj.name} 沒有市民，無法觸發政變。"
+    
+    coup_msg = f"{galaxy.year} 年：🚨 **{city_obj.name}** 發生了政變！"
+    city_obj.events.append(coup_msg)
+    current_year_global_events.append(coup_msg)
+
+    old_government_type = city_obj.government_type
+    # 政變可能導致政體強制改變
+    if city_obj.government_type == "民主制":
+        city_obj.government_type = "專制"
+    elif city_obj.government_type == "專制":
+        city_obj.government_type = random.choice(["民主制", "共和制"])
+    elif city_obj.government_type == "共和制":
+        city_obj.government_type = "專制"
+    
+    # 政變導致市民信任度和快樂度下降
+    for citizen in city_obj.citizens:
+        if citizen.alive:
+            citizen.trust = max(0.1, citizen.trust - random.uniform(0.1, 0.2))
+            citizen.happiness = max(0.1, citizen.happiness - random.uniform(0.1, 0.2))
+
+    current_year_global_events.append(f"{galaxy.year} 年：政變導致政體從 **{old_government_type}** 變為 **{city_obj.government_type}**！")
+    return f"成功觸發 {city_obj.name} 的政變！"
+
+def trigger_ai_awakening(planet_obj, current_year_global_events):
+    """觸發 AI 覺醒事件 (簡易版)。"""
+    if planet_obj.alien:
+        return f"外星行星 {planet_obj.name} 無法觸發 AI 覺醒。"
+    
+    if planet_obj.tech_levels["生產"] < 0.8: # AI覺醒與生產科技掛鉤
+        return f"{planet_obj.name} 的科技水平不足以觸發 AI 覺醒 (需要生產科技0.8)。"
+    
+    ai_msg = f"{galaxy.year} 年：🤖 **{planet_obj.name}** 的 AI 覺醒了！未來充滿未知！"
+    current_year_global_events.append(ai_msg)
+    for city in planet_obj.cities:
+        city.events.append(ai_msg)
+        for citizen in city.citizens:
+            if citizen.alive:
+                citizen.happiness = min(1.0, citizen.happiness + 0.1) # 初始可能帶來正面影響
+                citizen.trust = min(1.0, citizen.trust + 0.1)
+    # AI 覺醒可能帶來科技額外提升
+    planet_obj.tech_levels["生產"] = min(1.0, planet_obj.tech_levels["生產"] + 0.1)
+    planet_obj.tech_levels["軍事"] = min(1.0, planet_obj.tech_levels["軍事"] + 0.1)
+    return f"成功觸發 {planet_obj.name} 的 AI 覺醒！"
 
 # --- 模擬核心邏輯函數 ---
 
@@ -279,9 +507,17 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
         for i in range(num_new_cities):
             new_city_name = f"{new_planet_name}市#{i+1}"
             new_city = City(new_city_name)
-            new_city.citizens = [Citizen(f"{new_city_name}市民#{j+1}") for j in range(random.randint(10, 25))]
-            for c in new_city.citizens:
-                c.city = new_city_name 
+            # 新城市也有政黨
+            new_city.political_parties.append(PoliticalParty(f"{new_city_name}和平黨", "自由", "和平發展"))
+            new_city.political_parties.append(PoliticalParty(f"{new_city_name}擴張黨", "民族主義", "星際擴張"))
+            new_city.ruling_party = random.choice(new_city.political_parties)
+
+            for j in range(random.randint(10, 25)):
+                initial_family = random.choice(list(new_galaxy.families.values()))
+                citizen = Citizen(f"{new_city_name}市民#{j+1}", family=initial_family)
+                citizen.city = new_city_name 
+                initial_family.members.append(citizen)
+                new_city.citizens.append(citizen)
             new_planet.cities.append(new_city)
         
         # 在新增行星時，更新所有現有行星與新行星的關係
@@ -339,7 +575,8 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             elif policy["type"] == "減少污染":
                 planet.pollution = max(0, planet.pollution - policy["effect"])
             elif policy["type"] == "促進貿易":
-                pass # 貿易機率在貿易邏輯中提升
+                # 促進貿易政策在貿易邏輯中應用
+                pass
             elif policy["type"] == "資源補貼":
                 for city in planet.cities:
                     city.resources["糧食"] += policy["effect"] * 50
@@ -364,41 +601,84 @@ def _update_planet_attributes(planet, current_year_global_events):
         planet.tech_levels[tech_type] += random.uniform(0.005, 0.015) # 緩慢自然增長
         planet.tech_levels[tech_type] = min(1.0, planet.tech_levels[tech_type])
 
-    # 污染積累 (受環境科技影響)
+        # 檢查科技突破
+        if tech_type in TECH_BREAKTHROUGHS:
+            for breakthrough in TECH_BREAKTHROUGHS[tech_type]:
+                if planet.tech_levels[tech_type] >= breakthrough["threshold"] and breakthrough["name"] not in planet.unlocked_tech_breakthroughs:
+                    planet.unlocked_tech_breakthroughs.append(breakthrough["name"])
+                    breakthrough_msg = f"{galaxy.year} 年：🔬 **{planet.name}** 在 **{tech_type}** 領域取得了重大突破：**{breakthrough['name']}**！{breakthrough['effect_desc']}"
+                    current_year_global_events.append(breakthrough_msg)
+                    # 應用突破效果 (部分效果在其他函數中應用，這裡處理直接效果)
+                    if "pollution_cleanup" in breakthrough["effect"]:
+                        planet.pollution = max(0, planet.pollution - breakthrough["effect"]["pollution_cleanup"])
+                    if "happiness_bonus" in breakthrough["effect"]:
+                        for city in planet.cities:
+                            for citizen in city.citizens:
+                                if citizen.alive:
+                                    citizen.happiness = min(1.0, citizen.happiness + breakthrough["effect"]["happiness_bonus"])
+                    if "pollution_reset" in breakthrough["effect"] and breakthrough["effect"]["pollution_reset"]:
+                        planet.pollution = 0 # 直接歸零，覆蓋其他效果
+                        current_year_global_events.append(f"{galaxy.year} 年：✅ **{planet.name}** 的污染已被生態平衡系統完全清除！")
+
+
+    # 污染積累 (受環境科技和科技突破影響)
     pollution_growth = random.uniform(0.01, 0.02)
     pollution_reduction_from_tech = planet.tech_levels["環境"] * 0.015 # 環境科技越高，減少越多
+    
+    # 應用環境科技突破效果
+    for bt_name in planet.unlocked_tech_breakthroughs:
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+            for b in breakthroughs:
+                if b["name"] == bt_name and "pollution_growth_mult" in b["effect"]:
+                    pollution_growth *= b["effect"]["pollution_growth_mult"]
+    
     planet.pollution += (pollution_growth - pollution_reduction_from_tech)
     planet.pollution = max(0, planet.pollution) # 污染不為負
 
-    # 軍事科技提升防禦等級
-    planet.defense_level = min(100, int(planet.tech_levels["軍事"] * 100))
+    # 軍事科技提升防禦等級 (受科技突破影響)
+    defense_cap = 100
+    for bt_name in planet.unlocked_tech_breakthroughs:
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+            for b in breakthroughs:
+                if b["name"] == bt_name and "defense_cap_bonus" in b["effect"]:
+                    defense_cap += b["effect"]["defense_cap_bonus"]
+    planet.defense_level = min(defense_cap, int(planet.tech_levels["軍事"] * 100))
 
-    # 新型災難：疫情 (受醫療科技影響)
-    if not planet.epidemic_active and random.random() < (0.02 * (1 - planet.tech_levels["醫療"])): # 醫療科技越高，疫情爆發機率越低
-        planet.epidemic_active = True
-        planet.epidemic_severity = random.uniform(0.1, 0.5) * (1 - planet.tech_levels["醫療"] * 0.5) # 醫療科技降低嚴重性
-        epidemic_msg = f"{galaxy.year} 年：🦠 **{planet.name}** 爆發了嚴重的疫情！"
-        for city in planet.cities: city.events.append(epidemic_msg)
-        current_year_global_events.append(epidemic_msg)
+    # 新型災難：疫情 (受醫療科技和科技突破影響)
+    epidemic_chance_base = 0.02 * (1 - planet.tech_levels["醫療"])
+    for bt_name in planet.unlocked_tech_breakthroughs:
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+            for b in breakthroughs:
+                if b["name"] == bt_name and "epidemic_chance_mult" in b["effect"]:
+                    epidemic_chance_base *= b["effect"]["epidemic_chance_mult"]
+
+    if not planet.epidemic_active and random.random() < epidemic_chance_base:
+        trigger_epidemic(planet, current_year_global_events) # 使用統一的觸發函數
     
     if planet.epidemic_active:
-        # 疫情影響：市民健康下降，死亡率增加
-        epidemic_impact_on_health = planet.epidemic_severity * 0.1 # 基礎影響
-        epidemic_impact_on_health *= (1 - planet.tech_levels["醫療"] * 0.8) # 醫療科技大幅減輕影響
+        epidemic_impact_on_health = planet.epidemic_severity * 0.1
+        epidemic_impact_on_health *= (1 - planet.tech_levels["醫療"] * 0.8)
+        
+        # 應用醫療科技突破效果
+        for bt_name in planet.unlocked_tech_breakthroughs:
+            for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+                for b in breakthroughs:
+                    if b["name"] == bt_name and "epidemic_severity_mult" in b["effect"]:
+                        epidemic_impact_on_health *= b["effect"]["epidemic_severity_mult"]
+
         epidemic_impact_on_health = max(0.01, epidemic_impact_on_health)
 
         for city in planet.cities:
             for citizen in city.citizens:
-                if citizen.alive and random.random() < (epidemic_impact_on_health + 0.01): # 疫情導致健康下降和少量死亡
+                if citizen.alive and random.random() < (epidemic_impact_on_health + 0.01):
                     citizen.health -= epidemic_impact_on_health
-                    citizen.happiness = max(0.1, citizen.happiness - epidemic_impact_on_health * 0.5) # 疫情影響快樂度
-                    if citizen.health < 0.1: # 健康極低可能死亡
+                    citizen.happiness = max(0.1, citizen.happiness - epidemic_impact_on_health * 0.5)
+                    if citizen.health < 0.1:
                         citizen.alive = False
                         citizen.death_cause = "疫情"
                         city.events.append(f"{galaxy.year} 年：{citizen.name} 在 {city.name} 因疫情而死亡。")
                         current_year_global_events.append(f"{galaxy.year} 年：{citizen.name} 在 {city.name} 因疫情而死亡。")
         
-        # 疫情隨時間可能減弱或結束
         planet.epidemic_severity = max(0.0, planet.epidemic_severity - random.uniform(0.05, 0.1))
         if planet.epidemic_severity <= 0.05:
             planet.epidemic_active = False
@@ -426,6 +706,18 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
         if planet.name > other_planet_name: # 確保只處理一次 (例如只處理 "地球" 對 "賽博星" 的關係，不處理 "賽博星" 對 "地球" 的)
             continue
 
+        # 處理條約效果 (非戰爭狀態)
+        for treaty in planet.active_treaties:
+            if treaty.type == "非侵略" and other_planet_obj.name in treaty.signatories:
+                # 非侵略條約降低衝突機率
+                if random.random() < 0.8: # 80% 機率阻止衝突發生
+                    continue
+            if treaty.type == "科技共享" and other_planet_obj.name in treaty.signatories:
+                # 科技共享條約加速科技發展
+                for tech_type in planet.tech_levels.keys():
+                    planet.tech_levels[tech_type] = min(1.0, planet.tech_levels[tech_type] + 0.005) # 少量加速
+                    other_planet_obj.tech_levels[tech_type] = min(1.0, other_planet_obj.tech_levels[tech_type] + 0.005)
+        
         # --- 戰爭邏輯 ---
         if other_planet_name in planet.war_with: # 如果正在交戰
             planet.war_duration[other_planet_name] = planet.war_duration.get(other_planet_name, 0) + 1
@@ -463,6 +755,14 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             elif other_planet_pop < planet_pop * population_ratio_for_surrender and random.random() < 0.2: # 對方人口太少，可能投降
                 peace_conditions_met = True
             
+            # 應用科技突破的戰爭勝利機率加成
+            for bt_name in planet.unlocked_tech_breakthroughs:
+                for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+                    for b in breakthroughs:
+                        if b["name"] == bt_name and "war_win_chance_bonus" in b["effect"]:
+                            if random.random() < b["effect"]["war_win_chance_bonus"]:
+                                peace_conditions_met = True # 強行結束戰爭，視為勝利
+
             if peace_conditions_met:
                 # 結束戰爭
                 planet.war_with.remove(other_planet_name)
@@ -478,7 +778,47 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
                 current_year_global_events.append(peace_msg)
                 for city in planet.cities: city.events.append(peace_msg)
                 for city in other_planet_obj.cities: city.events.append(peace_msg)
-            
+
+                # 戰爭結果影響 (簡化為隨機分配資源/人口/科技)
+                if planet_pop > other_planet_pop: # 假設人口多的一方是勝利者
+                    winner = planet
+                    loser = other_planet_obj
+                else:
+                    winner = other_planet_obj
+                    loser = planet
+                
+                if winner.name == planet.name: # 確保 winner 是當前 planet 或 other_planet_obj
+                    if planet_pop > other_planet_pop * 1.5: # 顯著勝利
+                        # 勝利方獲得資源和稅收
+                        winner_resource_gain = int(sum(c.resources["糧食"] for c in loser.cities) * 0.1)
+                        winner_tax_gain = int(sum(c.resources["稅收"] for c in loser.cities) * 0.2)
+                        for city in winner.cities:
+                            city.resources["糧食"] += winner_resource_gain / len(winner.cities)
+                            city.resources["稅收"] += winner_tax_gain / len(winner.cities)
+                        
+                        # 戰敗方人口減少，勝利方人口增加 (部分人口遷移)
+                        pop_transfer = int(sum(len(c.citizens) for c in loser.cities) * 0.05)
+                        for _ in range(pop_transfer):
+                            if loser.cities and loser.cities[0].citizens:
+                                c = random.choice(loser.cities[0].citizens)
+                                if c.alive:
+                                    loser.cities[0].citizens.remove(c)
+                                    c.city = winner.cities[0].name
+                                    winner.cities[0].citizens.append(c)
+                                    
+                        # 科技竊取
+                        for tech_type in winner.tech_levels.keys():
+                            winner.tech_levels[tech_type] = min(1.0, winner.tech_levels[tech_type] + loser.tech_levels[tech_type] * 0.05) # 竊取5%
+
+                        war_result_msg = f"{galaxy.year} 年：🏆 **{winner.name}** 在戰爭中取得勝利，獲得了資源、人口並竊取了科技！"
+                        current_year_global_events.append(war_result_msg)
+                        # 戰敗方信任度下降
+                        for city in loser.cities:
+                            for citizen in city.citizens:
+                                if citizen.alive:
+                                    citizen.trust = max(0.1, citizen.trust - 0.1)
+                                    citizen.happiness = max(0.1, citizen.happiness - 0.1)
+                
             # 如果正在戰爭，跳過下面的衝突觸發和關係變化，因為戰爭狀態優先
             return 
 
@@ -488,6 +828,11 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             base_conflict_chance *= 1.2
 
         conflict_chance = max(0.01, base_conflict_chance * (1 - planet.tech_levels["軍事"])) # 軍事科技降低衝突機率
+
+        # 應用非侵略條約效果
+        for treaty in planet.active_treaties:
+            if treaty.type == "非侵略" and other_planet_obj.name in treaty.signatories:
+                conflict_chance *= 0.1 # 大幅降低衝突機率
 
         if relation_status == "friendly":
             conflict_chance *= 0.5 # 友好關係大幅降低衝突機率
@@ -509,7 +854,7 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             if relation_status != "hostile": # 如果還不是敵對，則轉為敵對
                 planet.relations[other_planet_name] = "hostile"
                 other_planet_obj.relations[planet.name] = "hostile"
-                current_year_global_events.append(f"{galaxy.year} 年：💥 {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！")
+                current_year_global_events.append(f"{galaxy.year} 年：� {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！")
             
             # 如果衝突等級非常高且關係敵對，則宣戰
             if planet.conflict_level > 0.7 and other_planet_obj.conflict_level > 0.7 and planet.relations[other_planet_name] == "hostile":
@@ -565,6 +910,15 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
 
             actual_attack_strength = max(0.01, attack_strength * (1 - total_defense_bonus))
 
+            # 應用軍事科技突破的攻擊傷害加成
+            attack_damage_bonus_from_tech = 0
+            for bt_name in planet.unlocked_tech_breakthroughs:
+                for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+                    for b in breakthroughs:
+                        if b["name"] == bt_name and "attack_damage_bonus" in b["effect"]:
+                            attack_damage_bonus_from_tech += b["effect"]["attack_damage_bonus"]
+            actual_attack_strength *= (1 + attack_damage_bonus_from_tech)
+            
             # 造成人口和資源損失
             population_loss = int(sum(len(c.citizens) for c in target_planet_for_random_attack.cities) * actual_attack_strength)
             resource_loss = int(sum(c.resources["糧食"] for c in target_planet_for_random_attack.cities) * actual_attack_strength * 0.5)
@@ -603,8 +957,6 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
                 current_year_global_events.append(counter_attack_msg)
 
     # 衝突對市民的影響 (在戰爭邏輯中已處理，這裡只處理非戰爭衝突)
-    # Note: This loop might be redundant if all conflict/war deaths are handled within the above blocks.
-    # Keeping it for now for any potential non-war conflict impact not covered.
     for city in planet.cities:
         for citizen in city.citizens:
             if citizen.alive and random.random() < (planet.conflict_level * 0.002): # 輕微的衝突死亡率
@@ -622,52 +974,93 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
     elif city.government_type == "民主制":
         resource_drain_multiplier = 1.2 # 民主制可能效率較低（但信任度高）
 
-    # 資源消耗 (受人口影響)
-    population_consumption = len(city.citizens) * 0.5 # 每人每月消耗0.5單位糧食/能源
-    city.resources["糧食"] -= population_consumption * resource_drain_multiplier
-    city.resources["能源"] -= (population_consumption / 2) * resource_drain_multiplier
+    # 應用生產科技突破效果
+    consumption_reduction_bonus = 0
+    for bt_name in planet.unlocked_tech_breakthroughs:
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+            for b in breakthroughs:
+                if b["name"] == bt_name and "resource_consumption_reduction" in b["effect"]:
+                    consumption_reduction_bonus += b["effect"]["resource_consumption_reduction"]
+    
+    # 資源消耗 (受人口影響和科技突破影響)
+    population_consumption = len(city.citizens) * 0.5
+    actual_consumption_multiplier = max(0, 1 - consumption_reduction_bonus)
+    city.resources["糧食"] -= population_consumption * resource_drain_multiplier * actual_consumption_multiplier
+    city.resources["能源"] -= (population_consumption / 2) * resource_drain_multiplier * actual_consumption_multiplier
 
-    # 資源生產 (受產業專精和生產科技影響)
-    production_bonus = planet.tech_levels["生產"] * 0.1 # 生產科技提供基礎加成
+    # 應用資源複製器效果
+    resource_infinite_active = False
+    for bt_name in planet.unlocked_tech_breakthroughs:
+        for tech_type, breakthroughs in TECH_BREAKTHROINGS.items():
+            for b in breakthroughs:
+                if b["name"] == bt_name and "resource_infinite" in b["effect"] and b["effect"]["resource_infinite"]:
+                    resource_infinite_active = True
+                    break
+            if resource_infinite_active: break
+        if resource_infinite_active: break
+
+    if resource_infinite_active:
+        city.resources["糧食"] = 1000 # 設定為一個非常高的值
+        city.resources["能源"] = 1000
+        current_year_global_events.append(f"{galaxy.year} 年：✨ **{city.name}** 的資源複製器啟動，糧食和能源供應無限！")
+
+    # 資源生產 (受產業專精和生產科技及科技突破影響)
+    production_bonus = planet.tech_levels["生產"] * 0.1
+    for bt_name in planet.unlocked_tech_breakthroughs:
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+            for b in breakthroughs:
+                if b["name"] == bt_name and "resource_production_bonus" in b["effect"]:
+                    production_bonus += b["effect"]["resource_production_bonus"]
+
     if city.specialization == "農業":
         city.resources["糧食"] += 20 * (1 + production_bonus)
     elif city.specialization == "工業":
         city.resources["能源"] += 15 * (1 + production_bonus)
     elif city.specialization == "科技":
-        # 科技城市可能直接貢獻稅收或科技點
         city.resources["稅收"] += 10 * (1 + production_bonus)
-        planet.tech_levels["生產"] = min(1.0, planet.tech_levels["生產"] + 0.005) # 科技城市額外提升生產科技
+        planet.tech_levels["生產"] = min(1.0, planet.tech_levels["生產"] + 0.005)
     elif city.specialization == "服務":
         city.resources["稅收"] += 15 * (1 + production_bonus)
-        for citizen in city.citizens: # 服務業提升市民快樂度
+        for citizen in city.citizens:
             if citizen.alive: citizen.happiness = min(1.0, citizen.happiness + 0.002)
     elif city.specialization == "軍事":
-        city.resources["能源"] += 10 * (1 + production_bonus) # 軍事基地消耗能源也生產能源
-        planet.tech_levels["軍事"] = min(1.0, planet.tech_levels["軍事"] + 0.005) # 軍事城市額外提升軍事科技
+        city.resources["能源"] += 10 * (1 + production_bonus)
+        planet.tech_levels["軍事"] = min(1.0, planet.tech_levels["軍事"] + 0.005)
 
-    # 貿易 (簡化為盟友間資源平衡)
+    # 貿易 (簡化為盟友間資源平衡，受聯邦政策和貿易條約影響)
+    trade_chance_modifier = 1.0
+    if galaxy.active_federation_policy and galaxy.active_federation_policy["type"] == "促進貿易":
+        trade_chance_modifier = 1.5
+    
+    # 應用貿易條約效果
+    for treaty in planet.active_treaties:
+        if treaty.type == "貿易" and city.name in [c.name for c in planet.cities]: # 確保條約與當前城市所在行星相關
+            if "trade_bonus" in treaty.effects:
+                trade_chance_modifier *= (1 + treaty.effects["trade_bonus"])
+
     for ally_name in planet.allies:
         ally_planet = next((p for p in galaxy.planets if p.name == ally_name and p.is_alive), None)
         if ally_planet:
             for ally_city in ally_planet.cities:
-                # 如果我方城市糧食過剩，盟友城市糧食短缺，則進行貿易
-                if city.resources["糧食"] > 150 and ally_city.resources["糧食"] < 50:
-                    trade_amount = min(20, city.resources["糧食"] - 150, 50 - ally_city.resources["糧食"])
-                    if trade_amount > 0:
-                        city.resources["糧食"] -= trade_amount
-                        ally_city.resources["糧食"] += trade_amount
-                        city.resources["稅收"] += trade_amount # 賣方賺稅收
-                        ally_city.resources["稅收"] -= trade_amount * 0.5 # 買方花費稅收
-                        current_year_global_events.append(f"{galaxy.year} 年：🤝 {city.name} 與 {ally_city.name} 進行了糧食貿易。")
-                # 能源貿易
-                if city.resources["能源"] > 100 and ally_city.resources["能源"] < 30:
-                    trade_amount = min(10, city.resources["能源"] - 100, 30 - ally_city.resources["能源"])
-                    if trade_amount > 0:
-                        city.resources["能源"] -= trade_amount
-                        ally_city.resources["能源"] += trade_amount
-                        city.resources["稅收"] += trade_amount # 賣方賺稅收
-                        ally_city.resources["稅收"] -= trade_amount * 0.5 # 買方花費稅收
-                        current_year_global_events.append(f"{galaxy.year} 年：🤝 {city.name} 與 {ally_city.name} 進行了能源貿易。")
+                if random.random() < (0.05 * trade_chance_modifier): # 貿易機率
+                    # 如果我方城市糧食過剩，盟友城市糧食短缺，則進行貿易
+                    if city.resources["糧食"] > 150 and ally_city.resources["糧食"] < 50:
+                        trade_amount = min(20, city.resources["糧食"] - 150, 50 - ally_city.resources["糧食"])
+                        if trade_amount > 0:
+                            city.resources["糧食"] -= trade_amount
+                            ally_city.resources["糧食"] += trade_amount
+                            city.resources["稅收"] += trade_amount # 賣方賺稅收
+                            ally_city.resources["稅收"] -= trade_amount * 0.5 # 買方花費稅收
+                            current_year_global_events.append(f"{galaxy.year} 年：🤝 {city.name} 與 {ally_city.name} 進行了糧食貿易。")
+                    # 能源貿易
+                    if city.resources["能源"] > 100 and ally_city.resources["能源"] < 30:
+                        trade_amount = min(10, city.resources["能源"] - 100, 30 - ally_city.resources["能源"])
+                        if trade_amount > 0:
+                            city.resources["能源"] -= trade_amount
+                            ally_city.resources["能源"] += trade_amount
+                            city.resources["稅收"] += trade_amount # 賣方賺稅收
+                            ally_city.resources["稅收"] -= trade_amount * 0.5 # 買方花費稅收
+                            current_year_global_events.append(f"{galaxy.year} 年：🤝 {city.name} 與 {ally_city.name} 進行了能源貿易。")
 
     # 資源短缺事件 (饑荒)
     if city.resources["糧食"] < 50 or city.resources["能源"] < 30:
@@ -742,33 +1135,7 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
         
         # 叛亂事件 (群眾運動長期不平息)
         if city.mass_movement_active and (avg_trust < 0.3 or avg_happiness < 0.3) and random.random() < 0.02:
-            rebellion_msg = f"{galaxy.year} 年：🔥 **{city.name}** 爆發了大規模叛亂！政體可能改變！"
-            city.events.append(rebellion_msg)
-            current_year_global_events.append(rebellion_msg)
-            # 叛亂導致人口和資源大量損失
-            rebellion_death_count = int(len(alive_citizens_for_stats) * random.uniform(0.05, 0.15))
-            for _ in range(rebellion_death_count):
-                if alive_citizens_for_stats:
-                    victim = random.choice(alive_citizens_for_stats)
-                    victim.alive = False
-                    victim.death_cause = "叛亂"
-                    city.death_count += 1
-                    city.graveyard.append((victim.name, victim.age, victim.ideology, victim.death_cause))
-                    alive_citizens_for_stats.remove(victim) # 從活著的市民列表中移除
-            
-            city.resources["糧食"] = max(0, city.resources["糧食"] - random.uniform(50, 100))
-            city.resources["能源"] = max(0, city.resources["能源"] - random.uniform(30, 70))
-
-            # 政體可能改變
-            if city.government_type == "專制":
-                city.government_type = random.choice(["民主制", "共和制"])
-            elif city.government_type == "民主制":
-                city.government_type = "專制" # 民主制動盪可能走向專制
-            elif city.government_type == "共和制":
-                city.government_type = random.choice(["專制", "民主制"])
-            
-            current_year_global_events.append(f"{galaxy.year} 年：政體在叛亂中變為 **{city.government_type}**！")
-            city.mass_movement_active = False # 叛亂結束，運動平息
+            trigger_revolution(city, current_year_global_events) # 使用統一的觸發函數
 
     elif city.mass_movement_active and avg_trust > 0.6 and avg_happiness > 0.6:
         city.mass_movement_active = False
@@ -776,29 +1143,52 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
         city.events.append(movement_msg)
         current_year_global_events.append(movement_msg)
 
-    # 政體演化
-    if random.random() < 0.01: # 1% 機率觸發政體演化
+    # 政體演化 (現在更多受選舉和革命影響，這裡保留一些自然演化)
+    city.election_timer -= 1
+    if city.election_timer <= 0:
+        # 進行選舉
+        eligible_citizens_for_vote = [c for c in city.citizens if c.alive and c.age >= 18] # 假設18歲以上有投票權
+        if eligible_citizens_for_vote:
+            for party in city.political_parties:
+                party.calculate_support(eligible_citizens_for_vote)
+            
+            # 根據支持度選出執政黨
+            total_support = sum(p.support for p in city.political_parties)
+            if total_support > 0:
+                winning_party = max(city.political_parties, key=lambda p: p.support)
+                if winning_party != city.ruling_party:
+                    old_ruling_party = city.ruling_party.name if city.ruling_party else "無"
+                    city.ruling_party = winning_party
+                    election_msg = f"{galaxy.year} 年：🗳️ **{city.name}** 舉行了選舉！**{city.ruling_party.name}** 成為新的執政黨，取代了 {old_ruling_party}！"
+                    city.events.append(election_msg)
+                    current_year_global_events.append(election_msg)
+                else:
+                    election_msg = f"{galaxy.year} 年：🗳️ **{city.name}** 舉行了選舉！**{city.ruling_party.name}** 繼續執政。"
+                    city.events.append(election_msg)
+                    current_year_global_events.append(election_msg)
+            else:
+                current_year_global_events.append(f"{galaxy.year} 年：⚠️ {city.name} 無法舉行選舉，因為沒有足夠的合格選民。")
+        else:
+            current_year_global_events.append(f"{galaxy.year} 年：⚠️ {city.name} 無法舉行選舉，因為沒有足夠的合格選民。")
+        
+        city.election_timer = random.randint(5, 10) # 重置選舉計時器
+
+    # 政體演化 (現在更多受選舉和革命影響，這裡保留一些自然演化)
+    if random.random() < 0.005: # 0.5% 機率觸發政體演化
         if city.government_type == "民主制":
-            if avg_trust < 0.4 and city.mass_movement_active: # 民主制下信任度極低且有運動，可能轉為專制
+            if avg_trust < 0.4 and city.mass_movement_active:
                 city.government_type = "專制"
                 event_msg = f"{galaxy.year} 年：🚨 {city.name} 的民主制因動盪而演變為專制！"
                 city.events.append(event_msg)
                 current_year_global_events.append(event_msg)
-            elif avg_trust > 0.8: # 民主制下信任度極高，可能更穩定
-                pass # 暫時不演變，保持穩定
         elif city.government_type == "專制":
-            if avg_trust > 0.7: # 專制下信任度高，可能轉為共和制
+            if avg_trust > 0.7:
                 city.government_type = "共和制"
                 event_msg = f"{galaxy.year} 年：✨ {city.name} 的專制因民心所向而演變為共和制！"
                 city.events.append(event_msg)
                 current_year_global_events.append(event_msg)
-            elif avg_trust < 0.3 and city.mass_movement_active: # 專制下信任度極低且有運動，可能轉為民主制
-                city.government_type = "民主制"
-                event_msg = f"{galaxy.year} 年：✊ {city.name} 的專制在群眾運動中演變為民主制！"
-                city.events.append(event_msg)
-                current_year_global_events.append(event_msg)
         elif city.government_type == "共和制":
-            if avg_trust < 0.5: # 共和制下信任度低，可能退化為專制或民主
+            if avg_trust < 0.5:
                 city.government_type = random.choice(["專制", "民主制"])
                 event_msg = f"{galaxy.year} 年：📉 {city.name} 的共和制因信任度下降而退化為 {city.government_type}！"
                 city.events.append(event_msg)
@@ -825,6 +1215,38 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
             city.events.append(marriage_msg)
             current_year_global_events.append(marriage_msg)
 
+            # 結婚後可能組建新家族或加入對方家族
+            if citizen1.family and citizen2.family and citizen1.family != citizen2.family:
+                # 合併家族，簡化為一個家族吸收另一個
+                if citizen1.family.reputation >= citizen2.family.reputation:
+                    for member in citizen2.family.members:
+                        member.family = citizen1.family
+                        citizen1.family.members.append(member)
+                    galaxy.families.pop(citizen2.family.name, None) # 移除舊家族
+                    current_year_global_events.append(f"{galaxy.year} 年：家族 {citizen2.family.name} 併入 {citizen1.family.name}！")
+                else:
+                    for member in citizen1.family.members:
+                        member.family = citizen2.family
+                        citizen2.family.members.append(member)
+                    galaxy.families.pop(citizen1.family.name, None)
+                    current_year_global_events.append(f"{galaxy.year} 年：家族 {citizen1.family.name} 併入 {citizen2.family.name}！")
+            elif not citizen1.family and not citizen2.family:
+                # 創建新家族
+                new_family_name = f"{citizen1.name.split('市民')[0]}家族"
+                new_family = Family(new_family_name)
+                new_family.members.append(citizen1)
+                new_family.members.append(citizen2)
+                citizen1.family = new_family
+                citizen2.family = new_family
+                galaxy.families[new_family_name] = new_family
+                current_year_global_events.append(f"{galaxy.year} 年：新家族 **{new_family_name}** 誕生！")
+            elif not citizen1.family and citizen2.family:
+                citizen1.family = citizen2.family
+                citizen2.family.members.append(citizen1)
+            elif citizen1.family and not citizen2.family:
+                citizen2.family = citizen1.family
+                citizen1.family.members.append(citizen2)
+
     # 階段 1: 判斷市民的狀態變化
     for citizen in list(city.citizens): # Iterate on a copy as elements might be removed
         if not citizen.alive:
@@ -832,14 +1254,22 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
 
         citizen.age += 1
         
-        # 市民財富與稅收
+        # 市民財富與稅收 (應用生產科技突破效果)
         profession_income = {
             "農民": 10, "工人": 15, "科學家": 25, "商人": 30, "無業": 5,
             "醫生": 40, "藝術家": 12, "工程師": 35, "教師": 20, "服務員": 10,
             "小偷": 20, "黑幫成員": 25, "詐騙犯": 30, "毒販": 45
         }
         living_cost = 8 # 基本生活開銷
-        citizen.wealth += profession_income.get(citizen.profession, 0) - living_cost
+        
+        wealth_growth_bonus = 0
+        for bt_name in planet.unlocked_tech_breakthroughs:
+            for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+                for b in breakthroughs:
+                    if b["name"] == bt_name and "wealth_growth_bonus" in b["effect"]:
+                        wealth_growth_bonus += b["effect"]["wealth_growth_bonus"]
+
+        citizen.wealth += profession_income.get(citizen.profession, 0) * (1 + wealth_growth_bonus) - living_cost
         citizen.wealth = max(0, citizen.wealth) # 財富不為負
 
         # 犯罪職業的額外風險 (導致財富波動或健康/信任/快樂度下降)
@@ -862,15 +1292,19 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
         city.resources["稅收"] += int(citizen.wealth * tax_rate)
 
 
-        # 教育水平提升
-        if citizen.education_level < 3 and random.random() < 0.01: # 1% 機率提升教育水平
+        # 教育水平提升 (受家族聲望影響)
+        education_chance = 0.01
+        if citizen.family and citizen.family.reputation > 0.7:
+            education_chance *= 1.5 # 高聲望家族成員有更高教育機會
+
+        if citizen.education_level < 3 and random.random() < education_chance: # 1% 機率提升教育水平
             citizen.education_level += 1
             # 教育提升可能影響職業
             if citizen.education_level == 3: # 高等教育
                 eligible_high_professions = ["科學家", "醫生", "工程師"]
                 if citizen.profession not in eligible_high_professions and random.random() < 0.3: # 30% 機率轉為高階職業
                     citizen.profession = random.choice(eligible_high_professions)
-                    event_msg = f"{galaxy.year} 年：� {citizen.name} 晉升為 {citizen.profession}！"
+                    event_msg = f"{galaxy.year} 年：🎓 {citizen.name} 晉升為 {citizen.profession}！"
                     city.events.append(event_msg)
                     current_year_global_events.append(event_msg)
             elif citizen.education_level == 2: # 中等教育
@@ -899,18 +1333,41 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
                 event_msg = f"{galaxy.year} 年：{citizen.name} 在 {city.name} 因健康惡化而死亡。"
                 city.events.append(event_msg)
                 current_year_global_events.append(event_msg)
+        
+        # 健康恢復 (應用醫療科技突破效果)
+        health_recovery_bonus = 0
+        for bt_name in planet.unlocked_tech_breakthroughs:
+            for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+                for b in breakthroughs:
+                    if b["name"] == bt_name and "health_recovery_bonus" in b["effect"]:
+                        health_recovery_bonus += b["effect"]["health_recovery_bonus"]
+        citizen.health = min(1.0, citizen.health + 0.01 + health_recovery_bonus) # 自然恢復
 
-        # 死亡判斷
+        # 死亡判斷 (應用醫療科技突破效果)
+        base_death_chance_old_age = 0.1
+        lifespan_bonus = 0
+        natural_death_reduction_factor = 0 # Factor to reduce natural death chance
+        for bt_name in planet.unlocked_tech_breakthroughs:
+            for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
+                for b in breakthroughs:
+                    if b["name"] == bt_name and "lifespan_bonus" in b["effect"]:
+                        lifespan_bonus += b["effect"]["lifespan_bonus"]
+                    if b["name"] == bt_name and "natural_death_reduction" in b["effect"]:
+                        natural_death_reduction_factor = max(natural_death_reduction_factor, b["effect"]["natural_death_reduction"])
+
+        # Adjust age for old age death based on lifespan_bonus
+        effective_old_age_start = 80 + lifespan_bonus
+
         if not citizen.alive:
             dead_this_year.append(citizen)
-        elif citizen.age > 80 and random.random() < 0.1:
+        elif citizen.age > effective_old_age_start and random.random() < (base_death_chance_old_age * (1 - natural_death_reduction_factor)):
             citizen.alive = False
             citizen.death_cause = "壽終正寢"
             dead_this_year.append(citizen)
             event_msg = f"{galaxy.year} 年：{citizen.name} 在 {city.name} 壽終正寢。"
             city.events.append(event_msg)
             current_year_global_events.append(event_msg)
-        elif random.random() < 0.01:
+        elif random.random() < 0.01: # Base accidental death chance
             citizen.alive = False
             citizen.death_cause = "意外"
             dead_this_year.append(citizen)
@@ -918,12 +1375,14 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
             city.events.append(event_msg)
             current_year_global_events.append(event_msg)
 
-        # 如果市民死亡，處理其配偶關係
+        # 如果市民死亡，處理其配偶關係和家族成員移除
         if not citizen.alive:
             city.death_count += 1
             city.graveyard.append((citizen.name, citizen.age, citizen.ideology, citizen.death_cause))
             if citizen.partner and citizen.partner.alive:
                 citizen.partner.partner = None
+            if citizen.family and citizen in citizen.family.members:
+                citizen.family.members.remove(citizen) # Remove dead citizen from family
             continue
 
         # 出生判斷 (現在與配偶關聯，受快樂度影響)
@@ -937,7 +1396,8 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
                 parent1_trust=citizen.trust,
                 parent2_trust=citizen.partner.trust,
                 parent1_emotion=citizen.happiness, # 傳遞快樂度
-                parent2_emotion=citizen.partner.happiness # 傳遞快樂度
+                parent2_emotion=citizen.partner.happiness, # 傳遞快樂度
+                family=citizen.family # 繼承父親或母親的家族
             )
             baby.city = city.name
             newborns_this_year.append(baby)
@@ -945,6 +1405,8 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
             event_msg = f"{galaxy.year} 年：{citizen.name} 與 {citizen.partner.name} 在 {city.name} 生下一名子女。"
             city.events.append(event_msg)
             current_year_global_events.append(event_msg)
+            if baby.family:
+                baby.family.members.append(baby) # Add new born to family
 
         # 移民判斷 (受財富和快樂度影響)
         # 財富和快樂度越低，移民意願越高；財富和快樂度越高，越傾向留在原地或移民到更富裕的城市
@@ -970,6 +1432,10 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
                 else:
                     target_city = random.choice(other_cities) # fallback to random
 
+                # Remove from old family and add to new family if applicable
+                if citizen.family and citizen in citizen.family.members:
+                    citizen.family.members.remove(citizen)
+
                 citizen.city = target_city.name
                 target_city.citizens.append(citizen)
                 immigrated_out_this_year.append(citizen)
@@ -981,6 +1447,10 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
                 # 如果有配偶，配偶也一起移民
                 if citizen.partner and citizen.partner.alive and citizen.partner in city.citizens and citizen.partner not in immigrated_out_this_year:
                     partner = citizen.partner
+                    # Remove partner from old family
+                    if partner.family and partner in partner.family.members:
+                        partner.family.members.remove(partner)
+                    
                     partner.city = target_city.name
                     target_city.citizens.append(partner)
                     immigrated_out_this_year.append(partner)
@@ -1005,6 +1475,9 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
     avg_happiness = sum(c.happiness for c in alive_citizens_for_stats) / max(1, len(alive_citizens_for_stats)) if alive_citizens_for_stats else 0
     city.history.append((galaxy.year, avg_health, avg_trust, avg_happiness))
 
+    # 更新家族聲望
+    for family_name, family_obj in galaxy.families.items():
+        family_obj.update_reputation()
 
 def simulate_year(galaxy):
     """模擬一年的世界變化。"""
@@ -1019,6 +1492,16 @@ def simulate_year(galaxy):
             city.immigration_count = 0
             city.emigration_count = 0
             city.events = [] # 清空年度事件，只保留當前年的事件顯示
+        
+        # Decrement treaty durations for each planet
+        new_active_treaties = []
+        for treaty in planet.active_treaties:
+            treaty.duration -= 1
+            if treaty.duration > 0:
+                new_active_treaties.append(treaty)
+            else:
+                current_year_global_events.append(f"{galaxy.year} 年：條約「{treaty.type}」在 {planet.name} 與 {', '.join([p for p in treaty.signatories if p != planet.name])} 之間已到期。")
+        planet.active_treaties = new_active_treaties
 
     _handle_global_galaxy_events(galaxy, current_year_global_events)
 
@@ -1036,6 +1519,10 @@ def simulate_year(galaxy):
             planet.is_alive = False
             event_msg = f"{galaxy.year} 年：💥 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！"
             current_year_global_events.append(event_msg)
+            # Remove any treaties involving this dead planet
+            for p in galaxy.planets:
+                p.active_treaties = [t for t in p.active_treaties if planet.name not in t.signatories]
+
 
     # 清理已滅亡的行星
     galaxy.planets = [p for p in galaxy.planets if p.is_alive]
@@ -1174,10 +1661,22 @@ with st.container():
         )
         attacker_planet = next((p for p in galaxy.planets if p.name == attacker_planet_name), None)
 
-        # 選擇目標方 (不能是自己，不能是盟友)
+        # 選擇目標方 (不能是自己，不能是盟友，不能有非侵略條約)
         target_options = [p.name for p in active_planets_for_attack if p.name != attacker_planet_name and p.name not in attacker_planet.allies]
+        
+        # Filter out planets with non-aggression treaties
+        planets_with_non_aggression_treaty = set()
+        if attacker_planet:
+            for treaty in attacker_planet.active_treaties:
+                if treaty.type == "非侵略":
+                    for signatory in treaty.signatories:
+                        if signatory != attacker_planet.name:
+                            planets_with_non_aggression_treaty.add(signatory)
+        
+        target_options = [p_name for p_name in target_options if p_name not in planets_with_non_aggression_treaty]
+
         if not target_options:
-            st.warning(f"目前沒有可攻擊的行星（不能攻擊自己或盟友）。")
+            st.warning(f"目前沒有可攻擊的行星（不能攻擊自己、盟友或有非侵略條約的行星）。")
             target_planet_name = None
         else:
             target_planet_name = st.selectbox(
@@ -1193,16 +1692,24 @@ with st.container():
             else:
                 attack_type = st.radio(
                     "選擇攻擊類型：",
-                    ["精確打擊 (較低傷害，較低戰爭機率)", "全面開戰 (較高傷害，較高戰爭機率)"],
+                    ["精確打擊 (較低傷害，較低戰爭機率)", "全面開戰 (較高傷害，較高戰爭機率)", "末日武器 (需解鎖)"],
                     key="attack_type_radio"
                 )
                 
                 attack_cost = 50 # 基礎攻擊成本
                 if "全面開戰" in attack_type:
                     attack_cost = 100
+                elif "末日武器" in attack_type:
+                    if "末日武器" not in attacker_planet.unlocked_tech_breakthroughs:
+                        st.warning("尚未解鎖末日武器科技！")
+                        attack_cost = -1 # Make it impossible to select
+                    else:
+                        attack_cost = 500 # Very high cost for doomsday weapon
 
                 if st.button(f"發動攻擊 ({attack_cost} 稅收)"):
-                    if attacker_planet.cities and attacker_planet.cities[0].resources["稅收"] >= attack_cost:
+                    if attack_cost == -1:
+                        st.warning("請先解鎖末日武器科技！")
+                    elif attacker_planet.cities and attacker_planet.cities[0].resources["稅收"] >= attack_cost:
                         # 扣除攻擊方資源
                         attacker_planet.cities[0].resources["稅收"] -= attack_cost
 
@@ -1231,6 +1738,10 @@ with st.container():
                         if "全面開戰" in attack_type:
                             damage_multiplier = 0.2
                             war_chance = 0.5
+                        elif "末日武器" in attack_type:
+                            damage_multiplier = 1.0 # Potentially wipe out target
+                            war_chance = 1.0 # Always leads to war
+                            st.warning(f"**{attacker_planet.name}** 發動了末日武器攻擊！")
 
                         # 考慮防禦方的防禦等級和護盾
                         total_defense_bonus = target_planet.defense_level * 0.005 # 防禦等級提供減傷
@@ -1351,41 +1862,171 @@ with st.container():
         st.info("需要至少兩個活著的行星才能進行外交。")
     else:
         proposing_planet_name = st.selectbox(
-            "選擇發起結盟請求的行星：",
+            "選擇發起外交請求的行星：",
             [p.name for p in active_planets_for_alliance],
             key="proposing_planet_select"
         )
         proposing_planet = next((p for p in galaxy.planets if p.name == proposing_planet_name), None)
 
-        target_alliance_options = [
-            p.name for p in active_planets_for_alliance 
-            if p.name != proposing_planet_name and p.name not in proposing_planet.allies and p.name not in proposing_planet.war_with
-        ]
-        
-        if not target_alliance_options:
-            st.info(f"**{proposing_planet_name}** 目前沒有可結盟的行星（已結盟或正在交戰）。")
-            target_alliance_planet_name = None
-        else:
-            target_alliance_planet_name = st.selectbox(
-                "選擇目標結盟行星：",
-                target_alliance_options,
-                key="target_alliance_planet_select"
+        if proposing_planet:
+            diplomacy_action = st.radio(
+                "選擇外交行動：",
+                ["提出結盟請求", "提出貿易協議", "提出非侵略條約", "談判和平"],
+                key="diplomacy_action_radio"
             )
-        target_alliance_planet = next((p for p in galaxy.planets if p.name == target_alliance_planet_name), None)
 
-        if proposing_planet and target_alliance_planet:
-            if st.button("提出結盟請求", key="propose_alliance_button"):
-                proposing_planet.allies.add(target_alliance_planet.name)
-                target_alliance_planet.allies.add(proposing_planet.name)
-                
-                # 結盟會提升關係到友好
-                proposing_planet.relations[target_alliance_planet.name] = "friendly"
-                target_alliance_planet.relations[proposing_planet.name] = "friendly"
+            # Filter targets based on action and existing relationships/treaties
+            target_diplomacy_options = []
+            if diplomacy_action == "提出結盟請求":
+                target_diplomacy_options = [
+                    p.name for p in active_planets_for_alliance 
+                    if p.name != proposing_planet_name and p.name not in proposing_planet.allies and p.name not in proposing_planet.war_with
+                ]
+            elif diplomacy_action == "提出貿易協議":
+                target_diplomacy_options = [
+                    p.name for p in active_planets_for_alliance 
+                    if p.name != proposing_planet_name and p.name not in proposing_planet.war_with
+                    and not any(t.type == "貿易" and p.name in t.signatories for t in proposing_planet.active_treaties)
+                ]
+            elif diplomacy_action == "提出非侵略條約":
+                target_diplomacy_options = [
+                    p.name for p in active_planets_for_alliance 
+                    if p.name != proposing_planet_name and p.name not in proposing_planet.war_with
+                    and not any(t.type == "非侵略" and p.name in t.signatories for t in proposing_planet.active_treaties)
+                ]
+            elif diplomacy_action == "談判和平":
+                target_diplomacy_options = [p.name for p in active_planets_for_alliance if p.name in proposing_planet.war_with]
 
-                alliance_msg = f"{galaxy.year} 年：🤝 **{proposing_planet.name}** 與 **{target_alliance_planet.name}** 成功結盟！"
-                galaxy.global_events_log.append({"year": galaxy.year, "events": [alliance_msg]})
-                st.success(alliance_msg)
+
+            if not target_diplomacy_options:
+                st.info(f"**{proposing_planet_name}** 目前沒有可進行此外交行動的行星。")
+                target_diplomacy_planet_name = None
+            else:
+                target_diplomacy_planet_name = st.selectbox(
+                    "選擇目標行星：",
+                    target_diplomacy_options,
+                    key="target_diplomacy_planet_select"
+                )
+            target_diplomacy_planet = next((p for p in galaxy.planets if p.name == target_diplomacy_planet_name), None)
+
+            if proposing_planet and target_diplomacy_planet:
+                diplomacy_cost = 20 # Base cost for diplomacy
+                if diplomacy_action == "談判和平":
+                    diplomacy_cost = 50 # Higher cost for peace negotiation
+
+                if st.button(f"執行外交行動 ({diplomacy_cost} 稅收)", key="execute_diplomacy_button"):
+                    if proposing_planet.cities and proposing_planet.cities[0].resources["稅收"] >= diplomacy_cost:
+                        proposing_planet.cities[0].resources["稅收"] -= diplomacy_cost
+                        current_year_global_events = [] # Temp list for this action's events
+
+                        if diplomacy_action == "提出結盟請求":
+                            proposing_planet.allies.add(target_diplomacy_planet.name)
+                            target_diplomacy_planet.allies.add(proposing_planet.name)
+                            proposing_planet.relations[target_diplomacy_planet.name] = "friendly"
+                            target_diplomacy_planet.relations[proposing_planet.name] = "friendly"
+                            alliance_msg = f"{galaxy.year} 年：🤝 **{proposing_planet.name}** 與 **{target_diplomacy_planet.name}** 成功結盟！"
+                            st.success(alliance_msg)
+                            current_year_global_events.append(alliance_msg)
+                        
+                        elif diplomacy_action == "提出貿易協議":
+                            new_treaty = Treaty("貿易", [proposing_planet.name, target_diplomacy_planet.name], 10, {"trade_bonus": 0.2})
+                            proposing_planet.active_treaties.append(new_treaty)
+                            target_diplomacy_planet.active_treaties.append(new_treaty)
+                            trade_treaty_msg = f"{galaxy.year} 年：🤝 **{proposing_planet.name}** 與 **{target_diplomacy_planet.name}** 簽署了貿易協議，持續10年！"
+                            st.success(trade_treaty_msg)
+                            current_year_global_events.append(trade_treaty_msg)
+
+                        elif diplomacy_action == "提出非侵略條約":
+                            new_treaty = Treaty("非侵略", [proposing_planet.name, target_diplomacy_planet.name], 20)
+                            proposing_planet.active_treaties.append(new_treaty)
+                            target_diplomacy_planet.active_treaties.append(new_treaty)
+                            non_aggression_msg = f"{galaxy.year} 年：🕊️ **{proposing_planet.name}** 與 **{target_diplomacy_planet.name}** 簽署了非侵略條約，持續20年！"
+                            st.success(non_aggression_msg)
+                            current_year_global_events.append(non_aggression_msg)
+
+                        elif diplomacy_action == "談判和平":
+                            if target_diplomacy_planet.name in proposing_planet.war_with:
+                                # End war
+                                proposing_planet.war_with.remove(target_diplomacy_planet.name)
+                                target_diplomacy_planet.war_with.remove(proposing_planet.name)
+                                del proposing_planet.war_duration[target_diplomacy_planet.name]
+                                del target_diplomacy_planet.war_duration[proposing_planet.name]
+
+                                # Set to neutral relationship
+                                proposing_planet.relations[target_diplomacy_planet.name] = "neutral"
+                                target_diplomacy_planet.relations[proposing_planet.name] = "neutral"
+                                
+                                peace_msg = f"{galaxy.year} 年：🕊️ **{proposing_planet.name}** 與 **{target_diplomacy_planet.name}** 成功談判和平，結束了戰爭！"
+                                st.success(peace_msg)
+                                current_year_global_events.append(peace_msg)
+                            else:
+                                st.warning(f"**{proposing_planet.name}** 與 **{target_diplomacy_planet.name}** 並未處於戰爭狀態。")
+                        
+                        # Add events to global log
+                        if current_year_global_events:
+                            if galaxy.global_events_log and galaxy.global_events_log[-1]["year"] == galaxy.year:
+                                galaxy.global_events_log[-1]["events"].extend(current_year_global_events)
+                            else:
+                                galaxy.global_events_log.append({"year": galaxy.year, "events": current_year_global_events})
+                        st.rerun()
+                    else:
+                        st.warning(f"稅收不足！需要 {diplomacy_cost} 稅收來執行此外交行動。")
+
+st.markdown("---")
+with st.container():
+    st.markdown("#### 🚨 事件控制台")
+    event_trigger_type = st.selectbox(
+        "選擇要觸發的事件類型：",
+        ["革命", "疫情", "政變", "AI覺醒"],
+        key="event_trigger_type_select"
+    )
+
+    if event_trigger_type in ["革命", "政變"]:
+        target_city_for_event = st.selectbox(
+            f"選擇目標城市 ({event_trigger_type})：",
+            [c.name for p in galaxy.planets for c in p.cities if p.is_alive],
+            key="target_city_for_event_select"
+        )
+        selected_city_obj = next((c for p in galaxy.planets for c in p.cities if c.name == target_city_for_event), None)
+        if st.button(f"觸發 {event_trigger_type} 事件"):
+            if selected_city_obj:
+                current_year_global_events = [] # Temp list for this action's events
+                if event_trigger_type == "革命":
+                    result_msg = trigger_revolution(selected_city_obj, current_year_global_events)
+                elif event_trigger_type == "政變":
+                    result_msg = trigger_coup(selected_city_obj, current_year_global_events)
+                st.success(result_msg)
+                if current_year_global_events:
+                    if galaxy.global_events_log and galaxy.global_events_log[-1]["year"] == galaxy.year:
+                        galaxy.global_events_log[-1]["events"].extend(current_year_global_events)
+                    else:
+                        galaxy.global_events_log.append({"year": galaxy.year, "events": current_year_global_events})
                 st.rerun()
+            else:
+                st.warning("請選擇一個有效的城市。")
+    elif event_trigger_type in ["疫情", "AI覺醒"]:
+        target_planet_for_event = st.selectbox(
+            f"選擇目標行星 ({event_trigger_type})：",
+            [p.name for p in galaxy.planets if p.is_alive],
+            key="target_planet_for_event_select"
+        )
+        selected_planet_obj = next((p for p in galaxy.planets if p.name == target_planet_for_event), None)
+        if st.button(f"觸發 {event_trigger_type} 事件"):
+            if selected_planet_obj:
+                current_year_global_events = [] # Temp list for this action's events
+                if event_trigger_type == "疫情":
+                    result_msg = trigger_epidemic(selected_planet_obj, current_year_global_events)
+                elif event_trigger_type == "AI覺醒":
+                    result_msg = trigger_ai_awakening(selected_planet_obj, current_year_global_events)
+                st.success(result_msg)
+                if current_year_global_events:
+                    if galaxy.global_events_log and galaxy.global_events_log[-1]["year"] == galaxy.year:
+                        galaxy.global_events_log[-1]["events"].extend(current_year_global_events)
+                    else:
+                        galaxy.global_events_log.append({"year": galaxy.year, "events": current_year_global_events})
+                st.rerun()
+            else:
+                st.warning("請選擇一個有效的行星。")
 
 # --- 主模擬邏輯 ---
 # 使用 st.empty() 創建一個佔位符，用於顯示模擬進度，避免頻繁渲染
@@ -1430,7 +2071,12 @@ with st.container(): # 使用容器來應用卡片樣式
                 if any(p.name == p2_name and p.is_alive for p in galaxy.planets):
                     war_status = " (戰爭中)" if p2_name in p1.war_with else ""
                     alliance_status = " (盟友)" if p2_name in p1.allies else ""
-                    relations_str.append(f"{p2_name}: {status}{war_status}{alliance_status}")
+                    treaty_info = []
+                    for treaty in p1.active_treaties:
+                        if p2_name in treaty.signatories:
+                            treaty_info.append(f"{treaty.type} ({treaty.duration}年)")
+                    treaty_str = f" [{', '.join(treaty_info)}]" if treaty_info else ""
+                    relations_str.append(f"{p2_name}: {status}{war_status}{alliance_status}{treaty_str}")
             if relations_str:
                 st.write(f"- **{p1.name}** 與其他行星的關係: {', '.join(relations_str)}")
             else:
@@ -1445,6 +2091,13 @@ if galaxy.planets:
     planet_data = []
     for planet in galaxy.planets:
         x, y = galaxy.map_layout.get(planet.name, (0,0)) # 確保有位置
+        
+        # Calculate average health, trust, happiness for planets for map coloring
+        all_citizens_on_planet = [c for city in planet.cities for c in city.citizens if c.alive]
+        avg_health_p = sum(c.health for c in all_citizens_on_planet) / max(1, len(all_citizens_on_planet)) if all_citizens_on_planet else 0
+        avg_trust_p = sum(c.trust for c in all_citizens_on_planet) / max(1, len(all_citizens_on_planet)) if all_citizens_on_planet else 0
+        avg_happiness_p = sum(c.happiness for c in all_citizens_on_planet) / max(1, len(all_citizens_on_planet)) if all_citizens_on_planet else 0
+
         planet_data.append({
             "name": planet.name,
             "x": x,
@@ -1457,7 +2110,10 @@ if galaxy.planets:
             "pollution": planet.pollution,
             "conflict": planet.conflict_level,
             "defense_level": planet.defense_level,
-            "is_alive": planet.is_alive
+            "is_alive": planet.is_alive,
+            "avg_health": avg_health_p,
+            "avg_trust": avg_trust_p,
+            "avg_happiness": avg_happiness_p
         })
     df_planets = pd.DataFrame(planet_data)
 
@@ -1568,6 +2224,43 @@ if galaxy.planets:
         showlegend=False # Hide legend for this actual plot trace
     ))
 
+    # Add a second trace for coloring based on pollution/conflict (as a heatmap overlay or separate layer)
+    map_color_metric = st.radio(
+        "地圖顏色顯示：",
+        ["無", "污染", "衝突等級", "平均健康", "平均信任", "平均快樂度"],
+        key="map_color_metric_select"
+    )
+
+    if map_color_metric != "無":
+        # Prepare data for coloring
+        color_values = df_planets[map_color_metric]
+        
+        # Determine color scale
+        colorscale = 'Viridis' # Default for pollution/conflict (higher is worse)
+        if map_color_metric in ["平均健康", "平均信任", "平均快樂度"]:
+            colorscale = 'Plasma' # Higher is better
+            
+        fig_map.add_trace(go.Scatter(
+            x=df_planets["x"],
+            y=df_planets["y"],
+            mode='markers',
+            marker=dict(
+                size=25, # Slightly larger to show color
+                color=color_values,
+                colorscale=colorscale,
+                showscale=True,
+                colorbar=dict(title=map_color_metric),
+                symbol='circle',
+                line=dict(width=2, color='black'),
+                opacity=0.7 # Make it slightly transparent
+            ),
+            hoverinfo='text',
+            hovertemplate="<b>%{text}</b><br>" +
+                          f"{map_color_metric}: %{{marker.color}:.2f}<extra></extra>",
+            text=df_planets["name"],
+            showlegend=False # This trace is for coloring, not new legend item
+        ))
+
     fig_map.update_layout(
         title='星系地圖',
         xaxis=dict(showgrid=False, zeroline=False, visible=False),
@@ -1592,6 +2285,13 @@ else:
 for planet in galaxy.planets:
     st.markdown(f"#### 🪐 {planet.name} ({'外星' if planet.alien else '地球'})｜污染 **{planet.pollution:.2f}**｜衝突等級 **{planet.conflict_level:.2f}**{' (疫情活躍中)' if planet.epidemic_active else ''}｜防禦等級 **{planet.defense_level}**{' (護盾活躍中)' if planet.shield_active else ''}")
     st.markdown(f"**科技水平：** 軍事: {planet.tech_levels['軍事']:.2f} | 環境: {planet.tech_levels['環境']:.2f} | 醫療: {planet.tech_levels['醫療']:.2f} | 生產: {planet.tech_levels['生產']:.2f}")
+    st.markdown("##### 已解鎖科技突破：")
+    if planet.unlocked_tech_breakthroughs:
+        for bt in planet.unlocked_tech_breakthroughs:
+            st.write(f"- {bt}")
+    else:
+        st.write("- 暫無")
+
 if not galaxy.planets:
     st.warning("所有行星都已滅亡，星系一片死寂...")
 
@@ -1610,6 +2310,7 @@ for planet in galaxy.planets:
                 st.write(f"**群眾運動狀態：** {'活躍中' if city.mass_movement_active else '平靜'}")
                 st.write(f"**合作經濟水平：** {city.cooperative_economy_level:.2f}") # 顯示合作經濟水平
                 st.write(f"**政體：** {city.government_type}") # 顯示政體
+                st.write(f"**執政黨：** {city.ruling_party.name if city.ruling_party else '無'} (距離下次選舉: {city.election_timer} 年)")
 
                 # 城市投資功能
                 st.markdown("#### 💰 城市管理：")
@@ -1663,6 +2364,19 @@ for planet in galaxy.planets:
                 else:
                     st.info("該城市目前沒有活著的市民。")
 
+                # 政黨支持度
+                st.markdown("#### 🏛️ 政黨支持度：")
+                if city.political_parties:
+                    party_support_data = []
+                    for party in city.political_parties:
+                        party_support_data.append({"政黨": party.name, "支持度": party.support})
+                    party_support_df = pd.DataFrame(party_support_data)
+                    fig_party_support = px.pie(party_support_df, values='支持度', names='政黨', title=f"{city.name} 政黨支持度")
+                    st.plotly_chart(fig_party_support, use_container_width=True)
+                else:
+                    st.info("該城市沒有政黨記錄。")
+
+
                 # 死亡原因分析 (Plotly)
                 st.markdown("#### 💀 死亡原因分析：")
                 death_causes = [item[3] for item in city.graveyard if item[3] is not None]
@@ -1696,7 +2410,8 @@ for planet in galaxy.planets:
                     sample_citizens = random.sample([c for c in city.citizens if c.alive], min(5, len(city.citizens)))
                     for c in sample_citizens:
                         partner_info = f"配偶: {c.partner.name}" if c.partner else "單身"
-                        st.write(f"- **{c.name}**: 年齡 {c.age}, 健康 {c.health:.2f}, 信任 {c.trust:.2f}, 快樂度 {c.happiness:.2f}, 思想 {c.ideology}, 職業 {c.profession}, 教育 {c.education_level}, 財富 {c.wealth:.2f}, {partner_info}")
+                        family_info = f"家族: {c.family.name} (聲望: {c.family.reputation:.2f})" if c.family else "無家族"
+                        st.write(f"- **{c.name}**: 年齡 {c.age}, 健康 {c.health:.2f}, 信任 {c.trust:.2f}, 快樂度 {c.happiness:.2f}, 思想 {c.ideology}, 職業 {c.profession}, 教育 {c.education_level}, 財富 {c.wealth:.2f}, {partner_info}, {family_info}")
                 else:
                     st.info("該城市目前沒有活著的市民。")
 
@@ -1738,7 +2453,8 @@ with st.container(): # 使用容器來應用卡片樣式
                 "防禦等級": planet.defense_level, # 新增防禦等級
                 "群眾運動": '是' if city.mass_movement_active else '否',
                 "合作經濟": f"{city.cooperative_economy_level:.2f}",
-                "政體": city.government_type
+                "政體": city.government_type,
+                "執政黨": city.ruling_party.name if city.ruling_party else '無'
             })
 
     if all_city_data:
