@@ -340,7 +340,8 @@ def initialize_galaxy():
         ])
         city.ruling_party = random.choice(city.political_parties)
 
-        for i in range(20):
+        # --- 修正：增加賽博星城市的起始人口 ---
+        for i in range(random.randint(30, 40)): # 將起始人口增加到 30-40 之間
             initial_family = random.choice(list(new_galaxy.families.values()))
             citizen = Citizen(f"{cname}市民#{i+1}", family=initial_family)
             citizen.city = cname
@@ -518,7 +519,7 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             
             if candidates:
                 galaxy.federation_leader = max(candidates, key=lambda c: c.trust)
-                _log_global_event(galaxy, f"{galaxy.year} 年：� 星系聯邦舉行了盛大的選舉！來自 {galaxy.federation_leader.city} 的市民 **{galaxy.federation_leader.name}** 以其卓越的信任度被選為新的聯邦領導人！")
+                _log_global_event(galaxy, f"{galaxy.year} 年：👑 星系聯邦舉行了盛大的選舉！來自 {galaxy.federation_leader.city} 的市民 **{galaxy.federation_leader.name}** 以其卓越的信任度被選為新的聯邦領導人！")
 
                 st.session_state.awaiting_policy_choice = True
                 st.session_state.policy_effect = random.uniform(0.01, 0.03)
@@ -539,6 +540,9 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
                     planet.tech_levels[tech_type] = min(1.0, planet.tech_levels[tech_type] + policy["effect"])
             elif policy["type"] == "減少污染":
                 planet.pollution = max(0, planet.pollution - policy["effect"])
+            elif policy["type"] == "促進貿易":
+                for city in planet.cities: # This policy directly affects trade chance, not resources
+                    pass # Handled in _update_city_attributes
             elif policy["type"] == "資源補貼":
                 for city in planet.cities:
                     city.resources["糧食"] += policy["effect"] * 50
@@ -1938,3 +1942,4 @@ with st.container():
 
 st.markdown("---")
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
+
