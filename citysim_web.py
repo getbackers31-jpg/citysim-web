@@ -359,7 +359,7 @@ def initialize_galaxy():
         "賽博星": (5, 2)
     }
 
-    new_galaxy.prev_total_population = sum(len(city.citizens) for planet in new_galaxy.planets for city in planet.cities)
+    new_galaxy.prev_total_population = sum(len(city.citizens) for planet in new_galaxy.planets for city in new_galaxy.cities)
 
     return new_galaxy
 
@@ -1177,7 +1177,7 @@ def simulate_year(galaxy):
         
         if all(not c.citizens for c in planet.cities): # Check if all cities on planet have no citizens left
             planet.is_alive = False
-            _log_global_event(galaxy, f"{galaxy.year} 年：💥 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！這片土地成為了歷史。")
+            _log_global_event(galaxy, f"{galaxy.year} 年：� 行星 **{planet.name}** 上的所有城市都已滅亡，行星從星系中消失了！這片土地成為了歷史。")
             for p in galaxy.planets:
                 p.active_treaties = [t for t in p.active_treaties if planet.name not in t.signatories]
 
@@ -1241,6 +1241,8 @@ with st.sidebar:
         # 關鍵修正：清除 initialize_galaxy 的快取
         st.cache_resource.clear()
         st.session_state.galaxy = initialize_galaxy()
+        # 新增：重置政策選擇旗標，避免因舊狀態導致錯誤
+        st.session_state.awaiting_policy_choice = False 
         st.rerun()
 
 st.markdown(f"### ⏳ 當前年份：{galaxy.year}")
@@ -1252,8 +1254,17 @@ if 'awaiting_policy_choice' not in st.session_state:
 if st.session_state.awaiting_policy_choice:
     st.markdown("---")
     st.header("📜 聯邦政策選擇")
-    st.info(f"聯邦領導人 **{galaxy.federation_leader.name}** (來自 {galaxy.federation_leader.city}) 已選出！請選擇一項新政策。")
-    
+    # 新增：防禦性檢查，確保聯邦領導人物件存在
+    if galaxy.federation_leader:
+        st.info(f"聯邦領導人 **{galaxy.federation_leader.name}** (來自 {galaxy.federation_leader.city}) 已選出！請選擇一項新政策。")
+    else:
+        # 如果 leader 不存在（理論上不應該發生，但作為防禦性程式碼），則重置旗標並重新運行
+        st.warning("聯邦領導人資訊缺失或已失效，無法選擇政策。請重置模擬。")
+        st.session_state.awaiting_policy_choice = False
+        st.rerun()
+        # 由於 st.rerun() 會重新執行腳本，這裡的 st.stop() 是多餘的，可以移除以簡潔程式碼
+        # st.stop() 
+
     active_planets_for_stats = [p for p in galaxy.planets if p.is_alive]
     avg_galaxy_tech_military = sum(p.tech_levels["軍事"] for p in active_planets_for_stats) / max(1, len(active_planets_for_stats)) if active_planets_for_stats else 0
     avg_galaxy_tech_environment = sum(p.tech_levels["環境"] for p in active_planets_for_stats) / max(1, len(active_planets_for_stats)) if active_planets_for_stats else 0
@@ -1777,7 +1788,7 @@ else:
 
 
 for planet in galaxy.planets:
-    st.markdown(f"#### � {planet.name} ({'外星' if planet.alien else '地球'})｜污染 **{planet.pollution:.2f}**｜衝突等級 **{planet.conflict_level:.2f}**{' (疫情活躍中)' if planet.epidemic_active else ''}｜防禦等級 **{planet.defense_level}**{' (護盾活躍中)' if planet.shield_active else ''}")
+    st.markdown(f"#### 🪐 {planet.name} ({'外星' if planet.alien else '地球'})｜污染 **{planet.pollution:.2f}**｜衝突等級 **{planet.conflict_level:.2f}**{' (疫情活躍中)' if planet.epidemic_active else ''}｜防禦等級 **{planet.defense_level}**{' (護盾活躍中)' if planet.shield_active else ''}")
     st.markdown(f"**科技水平：** 軍事: {planet.tech_levels['軍事']:.2f} | 環境: {planet.tech_levels['環境']:.2f} | 醫療: {planet.tech_levels['醫療']:.2f} | 生產: {planet.tech_levels['生產']:.2f}")
     st.markdown("##### 已解鎖科技突破：")
     if planet.unlocked_tech_breakthroughs:
@@ -1944,4 +1955,3 @@ with st.container():
 
 st.markdown("---")
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
-
