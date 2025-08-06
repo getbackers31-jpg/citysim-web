@@ -1945,4 +1945,3 @@ with st.container():
 st.markdown("---")
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
 
-�
