@@ -59,7 +59,7 @@ st.markdown("""
     .st-emotion-cache-eczf16 { /* 這是 st.container 的一個常見類名，可能需要根據實際部署調整 */
         background-color: #ffffff;
         border-radius: 15px;
-        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
+        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
         padding: 25px;
         margin-bottom: 30px;
         border: 1px solid #e0e0e0;
@@ -340,8 +340,7 @@ def initialize_galaxy():
         ])
         city.ruling_party = random.choice(city.political_parties)
 
-        # --- 修正：增加賽博星城市的起始人口 ---
-        for i in range(random.randint(30, 40)): # 將起始人口增加到 30-40 之間
+        for i in range(20):
             initial_family = random.choice(list(new_galaxy.families.values()))
             citizen = Citizen(f"{cname}市民#{i+1}", family=initial_family)
             citizen.city = cname
@@ -519,7 +518,7 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             
             if candidates:
                 galaxy.federation_leader = max(candidates, key=lambda c: c.trust)
-                _log_global_event(galaxy, f"{galaxy.year} 年：👑 星系聯邦舉行了盛大的選舉！來自 {galaxy.federation_leader.city} 的市民 **{galaxy.federation_leader.name}** 以其卓越的信任度被選為新的聯邦領導人！")
+                _log_global_event(galaxy, f"{galaxy.year} 年： 星系聯邦舉行了盛大的選舉！來自 {galaxy.federation_leader.city} 的市民 **{galaxy.federation_leader.name}** 以其卓越的信任度被選為新的聯邦領導人！")
 
                 st.session_state.awaiting_policy_choice = True
                 st.session_state.policy_effect = random.uniform(0.01, 0.03)
@@ -540,9 +539,10 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
                     planet.tech_levels[tech_type] = min(1.0, planet.tech_levels[tech_type] + policy["effect"])
             elif policy["type"] == "減少污染":
                 planet.pollution = max(0, planet.pollution - policy["effect"])
-            elif policy["type"] == "促進貿易":
-                for city in planet.cities: # This policy directly affects trade chance, not resources
-                    pass # Handled in _update_city_attributes
+            elif policy["type"] == "促進貿易": # Added missing policy effect
+                for city in planet.cities:
+                    for citizen in [c for c in city.citizens if c.alive]:
+                        citizen.wealth = min(1000, citizen.wealth + policy["effect"] * 10) # Example effect
             elif policy["type"] == "資源補貼":
                 for city in planet.cities:
                     city.resources["糧食"] += policy["effect"] * 50
@@ -728,14 +728,14 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             _log_global_event(galaxy, f"{galaxy.year} 年：⚠️ {planet.name} 與 {other_planet_obj.name} 的衝突等級提升至 {planet.conflict_level:.2f}！緊張局勢加劇。")
 
             if relation_status != "hostile":
-                planet.relations[other_planet_name] = "hostile"
+                planet.relations[other_planet_obj.name] = "hostile"
                 other_planet_obj.relations[planet.name] = "hostile"
                 _log_global_event(galaxy, f"{galaxy.year} 年：💥 {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！外交關係跌至冰點。")
             
-            if planet.conflict_level > 0.7 and other_planet_obj.conflict_level > 0.7 and planet.relations[other_planet_name] == "hostile":
-                planet.war_with.add(other_planet_name)
+            if planet.conflict_level > 0.7 and other_planet_obj.conflict_level > 0.7 and planet.relations[other_planet_obj.name] == "hostile":
+                planet.war_with.add(other_planet_obj.name)
                 other_planet_obj.war_with.add(planet.name)
-                planet.war_duration[other_planet_name] = 0
+                planet.war_duration[other_planet_obj.name] = 0
                 other_planet_obj.war_duration[planet.name] = 0
                 _log_global_event(galaxy, f"{galaxy.year} 年：⚔️ **{planet.name}** 向 **{other_planet_obj.name}** 宣戰！星際戰爭全面爆發，宇宙為之顫抖！")
         else:
@@ -743,11 +743,11 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             other_planet_obj.conflict_level = max(0.0, other_planet_obj.conflict_level - random.uniform(0.01, 0.05))
 
             if relation_status == "hostile" and random.random() < 0.02:
-                planet.relations[other_planet_name] = "neutral"
+                planet.relations[other_planet_obj.name] = "neutral"
                 other_planet_obj.relations[planet.name] = "neutral"
                 _log_global_event(galaxy, f"{galaxy.year} 年：🤝 {planet.name} 與 {other_planet_obj.name} 的關係從敵對轉為中立。冰釋前嫌的跡象浮現。")
             elif relation_status == "neutral" and random.random() < 0.01:
-                planet.relations[other_planet_name] = "friendly"
+                planet.relations[other_planet_obj.name] = "friendly"
                 other_planet_obj.relations[planet.name] = "friendly"
                 _log_global_event(galaxy, f"{galaxy.year} 年：✨ {planet.name} 與 {other_planet_obj.name} 的關係從中立轉為友好。星際友誼的橋樑正在搭建。")
 
@@ -1238,6 +1238,8 @@ with st.sidebar:
 
     st.markdown("---")
     if st.button("重置模擬", help="將模擬器重置為初始狀態"):
+        # 關鍵修正：清除 initialize_galaxy 的快取
+        st.cache_resource.clear()
         st.session_state.galaxy = initialize_galaxy()
         st.rerun()
 
@@ -1775,7 +1777,7 @@ else:
 
 
 for planet in galaxy.planets:
-    st.markdown(f"#### 🪐 {planet.name} ({'外星' if planet.alien else '地球'})｜污染 **{planet.pollution:.2f}**｜衝突等級 **{planet.conflict_level:.2f}**{' (疫情活躍中)' if planet.epidemic_active else ''}｜防禦等級 **{planet.defense_level}**{' (護盾活躍中)' if planet.shield_active else ''}")
+    st.markdown(f"#### � {planet.name} ({'外星' if planet.alien else '地球'})｜污染 **{planet.pollution:.2f}**｜衝突等級 **{planet.conflict_level:.2f}**{' (疫情活躍中)' if planet.epidemic_active else ''}｜防禦等級 **{planet.defense_level}**{' (護盾活躍中)' if planet.shield_active else ''}")
     st.markdown(f"**科技水平：** 軍事: {planet.tech_levels['軍事']:.2f} | 環境: {planet.tech_levels['環境']:.2f} | 醫療: {planet.tech_levels['醫療']:.2f} | 生產: {planet.tech_levels['生產']:.2f}")
     st.markdown("##### 已解鎖科技突破：")
     if planet.unlocked_tech_breakthroughs:
@@ -1943,3 +1945,4 @@ with st.container():
 st.markdown("---")
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
 
+�
