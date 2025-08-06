@@ -489,7 +489,7 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             new_city.ruling_party = random.choice(new_city.political_parties)
 
             for j in range(random.randint(10, 25)):
-                initial_family = random.choice(list(galaxy.families.values()))
+                initial_family = random.choice(list(new_galaxy.families.values()))
                 citizen = Citizen(f"{new_city_name}市民#{j+1}", family=initial_family)
                 citizen.city = new_city_name
                 initial_family.members.append(citizen)
@@ -518,7 +518,7 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             
             if candidates:
                 galaxy.federation_leader = max(candidates, key=lambda c: c.trust)
-                _log_global_event(galaxy, f"{galaxy.year} 年：👑 星系聯邦舉行了盛大的選舉！來自 {galaxy.federation_leader.city} 的市民 **{galaxy.federation_leader.name}** 以其卓越的信任度被選為新的聯邦領導人！")
+                _log_global_event(galaxy, f"{galaxy.year} 年：� 星系聯邦舉行了盛大的選舉！來自 {galaxy.federation_leader.city} 的市民 **{galaxy.federation_leader.name}** 以其卓越的信任度被選為新的聯邦領導人！")
 
                 st.session_state.awaiting_policy_choice = True
                 st.session_state.policy_effect = random.uniform(0.01, 0.03)
@@ -576,7 +576,7 @@ def _update_planet_attributes(planet, current_year_global_events):
                         planet.pollution = 0
                         _log_global_event(galaxy, f"{galaxy.year} 年：✅ **{planet.name}** 的污染已被生態平衡系統完全清除！行星環境煥然一新。")
 
-    pollution_growth = random.uniform(0.01, 0.02) * (1 - _get_tech_effect_value(planet, "pollution_growth_mult"))
+    pollution_growth = random.uniform(0.01, 0.02) * (1 - (_get_tech_effect_value(planet, "pollution_growth_mult") or 0)) # Added default 0 for multiplier
     pollution_reduction_from_tech = planet.tech_levels["環境"] * 0.015
     planet.pollution = max(0, planet.pollution + pollution_growth - pollution_reduction_from_tech)
 
@@ -584,14 +584,14 @@ def _update_planet_attributes(planet, current_year_global_events):
     planet.defense_level = min(defense_cap, int(planet.tech_levels["軍事"] * 100))
 
     epidemic_chance_base = st.session_state.epidemic_chance_slider * (1 - planet.tech_levels["醫療"])
-    epidemic_chance_base *= _get_tech_effect_value(planet, "epidemic_chance_mult") or 1 # Apply multiplier, default to 1 if not found
+    epidemic_chance_base *= (_get_tech_effect_value(planet, "epidemic_chance_mult") or 1) # Apply multiplier, default to 1 if not found
 
     if not planet.epidemic_active and random.random() < epidemic_chance_base:
         trigger_epidemic(planet, current_year_global_events)
     
     if planet.epidemic_active:
         epidemic_impact_on_health = planet.epidemic_severity * 0.1 * (1 - planet.tech_levels["醫療"] * 0.8)
-        epidemic_impact_on_health *= _get_tech_effect_value(planet, "epidemic_severity_mult") or 1
+        epidemic_impact_on_health *= (_get_tech_effect_value(planet, "epidemic_severity_mult") or 1)
         epidemic_impact_on_health = max(0.01, epidemic_impact_on_health)
 
         for city in planet.cities:
@@ -663,7 +663,7 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             if (planet.war_duration[other_planet_name] >= war_duration_threshold and random.random() < 0.1) or \
                (planet_pop < other_planet_pop * population_ratio_for_surrender and random.random() < 0.2) or \
                (other_planet_pop < planet_pop * population_ratio_for_surrender and random.random() < 0.2) or \
-               (random.random() < _get_tech_effect_value(planet, "war_win_chance_bonus")):
+               (random.random() < (_get_tech_effect_value(planet, "war_win_chance_bonus") or 0)): # Added default 0 for bonus
                 peace_conditions_met = True
 
             if peace_conditions_met:
@@ -765,7 +765,7 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             total_defense_bonus += alliance_defense_bonus
 
             actual_attack_strength = max(0.01, attack_strength * (1 - total_defense_bonus))
-            actual_attack_strength *= (1 + _get_tech_effect_value(planet, "attack_damage_bonus"))
+            actual_attack_strength *= (1 + (_get_tech_effect_value(planet, "attack_damage_bonus") or 0)) # Added default 0 for bonus
             
             population_loss = int(sum(len(c.citizens) for c in target_planet_for_random_attack.cities) * actual_attack_strength)
             resource_loss = int(sum(c.resources["糧食"] for c in target_planet_for_random_attack.cities) * actual_attack_strength * 0.5)
@@ -816,7 +816,7 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
     gov_drain_multipliers = {"專制": 0.8, "民主制": 1.2, "共和制": 1.0}
     resource_drain_multiplier = gov_drain_multipliers.get(city.government_type, 1.0)
 
-    consumption_reduction_bonus = _get_tech_effect_value(planet, "resource_consumption_reduction")
+    consumption_reduction_bonus = (_get_tech_effect_value(planet, "resource_consumption_reduction") or 0) # Added default 0 for bonus
     
     population_consumption = len(city.citizens) * 0.5
     actual_consumption_multiplier = max(0, 1 - consumption_reduction_bonus)
@@ -829,7 +829,7 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
         city.resources["能源"] = 1000
         _log_global_event(galaxy, f"{galaxy.year} 年：✨ **{city.name}** 的資源複製器啟動，糧食和能源供應無限！城市進入永續發展時代。")
 
-    production_bonus = planet.tech_levels["生產"] * 0.1 + _get_tech_effect_value(planet, "resource_production_bonus")
+    production_bonus = planet.tech_levels["生產"] * 0.1 + (_get_tech_effect_value(planet, "resource_production_bonus") or 0) # Added default 0 for bonus
 
     specialization_effects = {
         "農業": {"糧食": 20},
@@ -1022,7 +1022,7 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
         }
         living_cost = 8
         
-        wealth_growth_bonus = _get_tech_effect_value(planet, "wealth_growth_bonus")
+        wealth_growth_bonus = (_get_tech_effect_value(planet, "wealth_growth_bonus") or 0) # Added default 0 for bonus
         citizen.wealth = max(0, citizen.wealth + profession_income.get(citizen.profession, 0) * (1 + wealth_growth_bonus) - living_cost)
 
         if citizen.profession in ["小偷", "黑幫成員", "詐騙犯", "毒販"] and random.random() < 0.03:
@@ -1055,10 +1055,10 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
                 citizen.death_cause = "疾病/污染"
                 _log_global_event(galaxy, f"{galaxy.year} 年：市民 {citizen.name} 在 {city.name} 因長期暴露於污染而死亡。")
         
-        citizen.health = min(1.0, citizen.health + 0.01 + _get_tech_effect_value(planet, "health_recovery_bonus"))
+        citizen.health = min(1.0, citizen.health + 0.01 + (_get_tech_effect_value(planet, "health_recovery_bonus") or 0)) # Added default 0 for bonus
 
-        lifespan_bonus = _get_tech_effect_value(planet, "lifespan_bonus")
-        natural_death_reduction_factor = _get_tech_effect_value(planet, "natural_death_reduction")
+        lifespan_bonus = (_get_tech_effect_value(planet, "lifespan_bonus") or 0) # Added default 0 for bonus
+        natural_death_reduction_factor = (_get_tech_effect_value(planet, "natural_death_reduction") or 0) # Added default 0 for bonus
         effective_old_age_start = 80 + lifespan_bonus
         base_death_chance_old_age = st.session_state.death_rate_slider * 10
 
@@ -1381,7 +1381,7 @@ with st.container():
                             target_planet.shield_active = False
 
                         actual_damage_multiplier = max(0.01, damage_multiplier * (1 - total_defense_bonus))
-                        actual_damage_multiplier *= (1 + _get_tech_effect_value(attacker_planet, "attack_damage_bonus"))
+                        actual_damage_multiplier *= (1 + (_get_tech_effect_value(attacker_planet, "attack_damage_bonus") or 0)) # Added default 0 for bonus
                         
                         population_loss = int(sum(len(c.citizens) for c in target_planet.cities) * actual_damage_multiplier)
                         resource_loss = int(sum(c.resources["糧食"] for c in target_planet.cities) * actual_damage_multiplier * 0.5)
@@ -1731,15 +1731,31 @@ if galaxy.planets:
         key="map_color_metric_select"
     )
 
+    # --- 修正 KeyError 的部分 ---
+    # 建立一個映射字典，將顯示名稱對應到 DataFrame 中的實際列名
+    map_color_metric_mapping = {
+        "污染": "pollution",
+        "衝突等級": "conflict",
+        "平均健康": "avg_health",
+        "平均信任": "avg_trust",
+        "平均快樂度": "avg_happiness"
+    }
+
     if map_color_metric != "無":
-        color_values = df_planets[map_color_metric]
-        colorscale = 'Viridis' if map_color_metric not in ["平均健康", "平均信任", "平均快樂度"] else 'Plasma'
-            
-        fig_map.add_trace(go.Scatter(x=df_planets["x"], y=df_planets["y"], mode='markers',
-            marker=dict(size=25, color=color_values, colorscale=colorscale, showscale=True, colorbar=dict(title=map_color_metric), symbol='circle', line=dict(width=2, color='black'), opacity=0.7),
-            hoverinfo='text', hovertemplate="<b>%{text}</b><br>" + f"{map_color_metric}: %{{marker.color:.2f}}<extra></extra>",
-            text=df_planets["name"], showlegend=False
-        ))
+        # 使用映射字典獲取正確的列名
+        actual_column_name = map_color_metric_mapping.get(map_color_metric)
+        if actual_column_name: # 確保映射存在
+            color_values = df_planets[actual_column_name]
+            colorscale = 'Viridis' if map_color_metric not in ["平均健康", "平均信任", "平均快樂度"] else 'Plasma'
+                
+            fig_map.add_trace(go.Scatter(x=df_planets["x"], y=df_planets["y"], mode='markers',
+                marker=dict(size=25, color=color_values, colorscale=colorscale, showscale=True, colorbar=dict(title=map_color_metric), symbol='circle', line=dict(width=2, color='black'), opacity=0.7),
+                hoverinfo='text', hovertemplate="<b>%{text}</b><br>" + f"{map_color_metric}: %{{marker.color:.2f}}<extra></extra>",
+                text=df_planets["name"], showlegend=False
+            ))
+        else:
+            st.warning(f"地圖顏色指標 '{map_color_metric}' 無法找到對應的數據列。")
+
 
     fig_map.update_layout(
         title='星系地圖',
@@ -1922,4 +1938,3 @@ with st.container():
 
 st.markdown("---")
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
-
