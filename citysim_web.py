@@ -37,7 +37,7 @@ st.markdown("""
     }
     div.stButton > button:first-child:hover {
         background-color: #45a049; /* 深綠色 */
-        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
+        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
         transform: translateY(-2px);
     }
 
@@ -59,7 +59,7 @@ st.markdown("""
     .st-emotion-cache-eczf16 { /* 這是 st.container 的一個常見類名，可能需要根據實際部署調整 */
         background-color: #ffffff;
         border-radius: 15px;
-        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
+        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
         padding: 25px;
         margin-bottom: 30px;
         border: 1px solid #e0e0e0;
@@ -1956,3 +1956,4 @@ with st.container():
 
 st.markdown("---")
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
+
