@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 📡 升級版 Citysim Streamlit UI（滑桿模擬年數 + 城市選擇 + 統計顯示 + 生育/疾病/戰爭/科技/污染 + 稅收/移民/墓園/思想派別/新聞）
+# � 升級版 Citysim Streamlit UI（滑桿模擬年數 + 城市選擇 + 統計顯示 + 生育/疾病/戰爭/科技/污染 + 稅收/移民/墓園/思想派別/新聞）
 import streamlit as st
 import random
 import pandas as pd # 引入 pandas 用於數據處理和圖表
@@ -440,12 +440,6 @@ def trigger_coup(city_obj, current_year_global_events):
     elif city_obj.government_type == "共和制":
         city_obj.government_type = "專制"
     
-    # 政變導致市民信任度和快樂度下降
-    for citizen in city_obj.citizens:
-        if citizen.alive:
-            citizen.trust = max(0.1, citizen.trust - random.uniform(0.1, 0.2))
-            citizen.happiness = max(0.1, citizen.happiness - random.uniform(0.1, 0.2))
-
     current_year_global_events.append(f"{galaxy.year} 年：政變導致政體從 **{old_government_type}** 變為 **{city_obj.government_type}**！新的統治者上台。")
     return f"成功觸發 {city_obj.name} 的政變！"
 
