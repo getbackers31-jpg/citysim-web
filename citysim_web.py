@@ -513,7 +513,7 @@ def _handle_global_galaxy_events(galaxy, current_year_global_events):
             new_city.ruling_party = random.choice(new_city.political_parties)
 
             for j in range(random.randint(10, 25)):
-                initial_family = random.choice(list(new_galaxy.families.values()))
+                initial_family = random.choice(list(galaxy.families.values())) # 修正此行：使用 galaxy
                 citizen = Citizen(f"{new_city_name}市民#{j+1}", family=initial_family)
                 citizen.city = new_city_name 
                 initial_family.members.append(citizen)
@@ -991,7 +991,7 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
     # 應用資源複製器效果
     resource_infinite_active = False
     for bt_name in planet.unlocked_tech_breakthroughs:
-        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items(): # Corrected typo: TECH_BREAKTHROINGS to TECH_BREAKTHROUGHS
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items():
             for b in breakthroughs:
                 if b["name"] == bt_name and "resource_infinite" in b["effect"] and b["effect"]["resource_infinite"]:
                     resource_infinite_active = True
@@ -2256,7 +2256,7 @@ if galaxy.planets:
             ),
             hoverinfo='text',
             hovertemplate="<b>%{text}</b><br>" +
-                          f"{map_color_metric}: %{{marker.color:.2f}}<extra></extra>", # Corrected f-string syntax here
+                          f"{map_color_metric}: %{{marker.color:.2f}}<extra></extra>",
             text=df_planets["name"],
             showlegend=False # This trace is for coloring, not new legend item
         ))
@@ -2482,5 +2482,4 @@ with st.container(): # 使用容器來應用卡片樣式
 
 st.markdown("---") # 分隔線
 st.info("模擬結束。請調整模擬年數或選擇其他城市查看更多資訊。")
-
-
+�
