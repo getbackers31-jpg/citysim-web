@@ -32,12 +32,12 @@ st.markdown("""
         font-size: 18px;
         font-weight: bold;
         transition: all 0.3s ease;
-        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+        box_shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
         cursor: pointer;
     }
     div.stButton > button:first-child:hover {
         background-color: #45a049; /* 深綠色 */
-        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
+        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.3);
         transform: translateY(-2px);
     }
 
@@ -59,7 +59,7 @@ st.markdown("""
     .st-emotion-cache-eczf16 { /* 這是 st.container 的一個常見類名，可能需要根據實際部署調整 */
         background-color: #ffffff;
         border-radius: 15px;
-        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
+        box_shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
         padding: 25px;
         margin-bottom: 30px;
         border: 1px solid #e0e0e0;
@@ -854,7 +854,7 @@ def _handle_interstellar_interactions(planet, galaxy, current_year_global_events
             if relation_status != "hostile": # 如果還不是敵對，則轉為敵對
                 planet.relations[other_planet_name] = "hostile"
                 other_planet_obj.relations[planet.name] = "hostile"
-                current_year_global_events.append(f"{galaxy.year} 年：� {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！")
+                current_year_global_events.append(f"{galaxy.year} 年：💥 {planet.name} 與 {other_planet_obj.name} 的關係惡化為敵對！")
             
             # 如果衝突等級非常高且關係敵對，則宣戰
             if planet.conflict_level > 0.7 and other_planet_obj.conflict_level > 0.7 and planet.relations[other_planet_name] == "hostile":
@@ -991,7 +991,7 @@ def _update_city_attributes(city, planet, galaxy, current_year_global_events):
     # 應用資源複製器效果
     resource_infinite_active = False
     for bt_name in planet.unlocked_tech_breakthroughs:
-        for tech_type, breakthroughs in TECH_BREAKTHROINGS.items():
+        for tech_type, breakthroughs in TECH_BREAKTHROUGHS.items(): # Corrected typo: TECH_BREAKTHROINGS to TECH_BREAKTHROUGHS
             for b in breakthroughs:
                 if b["name"] == bt_name and "resource_infinite" in b["effect"] and b["effect"]["resource_infinite"]:
                     resource_infinite_active = True
@@ -1211,7 +1211,7 @@ def _handle_citizen_lifecycle(city, planet, galaxy, current_year_global_events):
         if random.random() < 0.05:
             citizen1.partner = citizen2
             citizen2.partner = citizen1
-            marriage_msg = f"{galaxy.year} 年：💖 {citizen1.name} 與 {citizen2.name} 在 {city.name} 喜結連理！"
+            marriage_msg = f"{galaxy.year} 年：� {citizen1.name} 與 {citizen2.name} 在 {city.name} 喜結連理！"
             city.events.append(marriage_msg)
             current_year_global_events.append(marriage_msg)
 
@@ -2256,7 +2256,7 @@ if galaxy.planets:
             ),
             hoverinfo='text',
             hovertemplate="<b>%{text}</b><br>" +
-                          f"{map_color_metric}: %{{marker.color}:.2f}<extra></extra>",
+                          f"{map_color_metric}: %{{marker.color:.2f}}<extra></extra>", # Corrected f-string syntax here
             text=df_planets["name"],
             showlegend=False # This trace is for coloring, not new legend item
         ))
