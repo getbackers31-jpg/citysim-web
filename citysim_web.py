@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v2.0 (含特殊事件系統)
+# 🚀 火星殖民地計畫 v2.1 (最終穩定版)
 import streamlit as st
 import random
 
@@ -53,8 +53,6 @@ def initialize_game():
         st.session_state.game_over_reason = ""
         st.session_state.victory = False
         
-        # 新增特殊事件相關狀態
-        st.session_state.special_event_active = False
         st.session_state.special_event_effect = {}
 
 
@@ -207,7 +205,7 @@ def display_victory_screen():
     st.success(f"### 任務成功！")
     st.balloons()
     st.markdown(f"你在 **{st.session_state.game_day}** 天內成功建立了擁有 **{st.session_state.population}** 位居民的自給自足殖民地！")
-    if st.button("� 開啟新的殖民計畫"):
+    if st.button("🚀 開啟新的殖民計畫"):
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
@@ -221,12 +219,10 @@ def trigger_special_event():
     morale = st.session_state.morale
     effect = {}
 
-    # 高士氣事件
     if morale > 90 and random.random() < 0.15:
         effect['production_buff'] = 1.5
         log_event("✨ 士氣高昂，殖民者們充滿幹勁！今日所有設施產出增加 50%！")
     
-    # 低士氣事件
     elif morale < 30 and random.random() < 0.20:
         event_type = random.choice(["罷工", "疾病", "設施故障"])
         if event_type == "罷工":
@@ -246,14 +242,13 @@ def trigger_special_event():
 
 def run_next_day_simulation():
     st.session_state.game_day += 1
-    trigger_special_event() # 觸發特殊事件
+    trigger_special_event()
     event_effect = st.session_state.special_event_effect
 
     # 1. 計算產出
     production = {res: 0.0 for res in st.session_state.resources}
     prod_buff = event_effect.get('production_buff', 1.0)
 
-    # 被動生產
     for name in ["太陽能板", "核融合發電廠"]:
         count = st.session_state.buildings[name]
         spec = BUILDING_SPECS[name]
@@ -261,10 +256,9 @@ def run_next_day_simulation():
             for res, amount in spec["produces"].items():
                 production[res] += amount * count * prod_buff
 
-    # 主動生產 (受罷工和故障影響)
     if not event_effect.get('strike'):
         for name, workers in st.session_state.worker_assignments.items():
-            if event_effect.get('broken') == name: continue # 跳過故障建築
+            if event_effect.get('broken') == name: continue
             spec = BUILDING_SPECS[name]
             if "produces" in spec:
                 for res, amount in spec["produces"].items():
@@ -291,6 +285,12 @@ def run_next_day_simulation():
             damaged_building = random.choice(buildings_available)
             st.session_state.buildings[damaged_building] -= 1
             log_event(f"💥 隕石撞擊！一座 {damaged_building} 被摧毀了！")
+            # *** BUG 修正 v1.8：在事件發生當下立刻校正狀態 ***
+            spec = BUILDING_SPECS[damaged_building]
+            new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
+            if st.session_state.worker_assignments[damaged_building] > new_max_workers:
+                st.session_state.worker_assignments[damaged_building] = new_max_workers
+
 
     # 4. 更新士氣
     morale_change = 0
@@ -343,4 +343,3 @@ def check_game_status():
 
 if __name__ == "__main__":
     main()
-
