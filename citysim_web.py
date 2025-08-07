@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.5
+# 🚀 火星殖民地計畫 v1.6 (穩定版)
 import streamlit as st
 import random
 
@@ -101,6 +101,8 @@ def display_worker_assignment_panel():
     """顯示工人指派面板"""
     st.header("🧑‍🏭 殖民者指派中心")
     
+    # *** BUG 修正 v1.6：採用更穩定的邏輯 ***
+    # 1. 先計算總量
     total_assigned_workers = sum(st.session_state.worker_assignments.values())
     unassigned_workers = st.session_state.population - total_assigned_workers
     
@@ -111,25 +113,29 @@ def display_worker_assignment_panel():
     assignable_buildings = {name: spec for name, spec in BUILDING_SPECS.items() if spec["workers_needed"] > 0}
     
     for i, (name, spec) in enumerate(assignable_buildings.items()):
+        # 2. 計算單個建築的最大容量
         max_workers_for_building = st.session_state.buildings[name] * spec["workers_needed"]
         current_assignment = st.session_state.worker_assignments.get(name, 0)
 
-        # *** BUG 修正 ***
-        # 核心問題：當 unassigned_workers 為負數時，slider_max 可能會小於 current_assignment，導致崩潰。
-        # 解決方案：計算可用於此滑塊的工人時，只考慮真正未分配的工人（大於等於0）。
-        truly_unassigned_workers = max(0, unassigned_workers)
-        slider_max = current_assignment + truly_unassigned_workers
+        # 3. 渲染前先校正狀態，避免因建築被毀導致 current_assignment > max_workers
+        safe_assignment = min(current_assignment, max_workers_for_building)
+        if safe_assignment != current_assignment:
+            st.session_state.worker_assignments[name] = safe_assignment
+            # 不需要 rerun，因為會在本次渲染中直接使用 safe_assignment
         
+        # 4. 渲染滑桿，其最大值僅由建築容量決定
         new_assignment = worker_cols[i].slider(
-            f"指派至 {name} (上限: {max_workers_for_building})",
+            f"指派至 {name} (容量: {max_workers_for_building})",
             min_value=0,
-            max_value=min(max_workers_for_building, slider_max),
-            value=min(current_assignment, max_workers_for_building), # 確保初始值也不會超過建築容量
+            max_value=max_workers_for_building, # 上限固定為建築容量
+            value=safe_assignment, # 使用校正後的值
             key=f"assign_{name}"
         )
         st.session_state.worker_assignments[name] = new_assignment
 
-    if total_assigned_workers > st.session_state.population:
+    # 5. 在所有滑桿渲染後，重新計算總量並顯示警告
+    final_total_assigned = sum(st.session_state.worker_assignments.values())
+    if final_total_assigned > st.session_state.population:
         st.error("警告：指派的殖民者總數超過了總人口！請重新分配。")
     st.markdown("---")
 
@@ -162,7 +168,6 @@ def display_status_panel():
     st.metric("🗓️ 火星日", f"第 {st.session_state.game_day} 天")
     st.metric("🧑‍🚀 殖民者", f"{st.session_state.population} / {st.session_state.population_capacity}")
     
-    # 新增士氣顯示
     morale_emoji = "😊" if st.session_state.morale > 70 else "😐" if st.session_state.morale > 30 else "😟"
     st.metric("士氣", f"{st.session_state.morale:.1f} % {morale_emoji}")
 
@@ -212,14 +217,12 @@ def run_next_day_simulation():
     
     # 1. 計算產出 (基於工人指派)
     production = {res: 0.0 for res in st.session_state.resources}
-    # 被動生產 (不需要工人)
     for name in ["太陽能板", "核融合發電廠"]:
         count = st.session_state.buildings[name]
         spec = BUILDING_SPECS[name]
         if "produces" in spec:
             for res, amount in spec["produces"].items():
                 production[res] += amount * count
-    # 主動生產 (需要工人)
     for name, workers in st.session_state.worker_assignments.items():
         spec = BUILDING_SPECS[name]
         if "produces" in spec:
@@ -242,29 +245,27 @@ def run_next_day_simulation():
         log_event("⚠️ 一場強烈的沙塵暴來襲，太陽能板效率降低！")
         event_modifier["電力"] = 0.3
     if random.random() < 0.05:
-        buildings_available = [b for b, c in st.session_state.buildings.items() if c > 0]
+        buildings_available = [b for b, c in st.session_state.buildings.items() if c > 0 and b in st.session_state.worker_assignments]
         if buildings_available:
             damaged_building = random.choice(buildings_available)
             st.session_state.buildings[damaged_building] -= 1
             log_event(f"💥 隕石撞擊！一座 {damaged_building} 被摧毀了！")
             
-            # 如果被摧毀的建築有工人，需要重新分配
-            if damaged_building in st.session_state.worker_assignments:
-                spec = BUILDING_SPECS[damaged_building]
-                new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
-                if st.session_state.worker_assignments[damaged_building] > new_max_workers:
-                    freed_workers = st.session_state.worker_assignments[damaged_building] - new_max_workers
-                    log_event(f"⚠️ 因 {damaged_building} 被毀，{freed_workers} 名殖民者變為未指派狀態。")
-                    st.session_state.worker_assignments[damaged_building] = new_max_workers
+            spec = BUILDING_SPECS[damaged_building]
+            new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
+            if st.session_state.worker_assignments[damaged_building] > new_max_workers:
+                freed_workers = st.session_state.worker_assignments[damaged_building] - new_max_workers
+                log_event(f"⚠️ 因 {damaged_building} 被毀，{freed_workers} 名殖民者變為未指派狀態。")
+                st.session_state.worker_assignments[damaged_building] = new_max_workers
 
     # 4. 更新士氣
     morale_change = 0
     if st.session_state.resources["食物"] < st.session_state.population: morale_change -= 5
     if st.session_state.resources["水源"] < st.session_state.population: morale_change -= 5
     if st.session_state.population > st.session_state.population_capacity: morale_change -= 10
-    if morale_change == 0: morale_change += 1 # 如果一切順利，士氣會緩慢回升
+    if morale_change == 0: morale_change += 1 
     st.session_state.morale = max(0, min(100, st.session_state.morale + morale_change))
-    morale_modifier = 0.7 + (st.session_state.morale / 100) * 0.6 # 士氣影響效率 (70% ~ 130%)
+    morale_modifier = 0.7 + (st.session_state.morale / 100) * 0.6 
 
     # 5. 更新資源
     net_power = (production["電力"] * event_modifier["電力"]) - consumption["電力"]
@@ -281,7 +282,7 @@ def run_next_day_simulation():
 
     for res in ["水源", "食物", "氧氣", "鋼材"]:
         if res in production:
-            net_production = production[res] * power_deficit_ratio * morale_modifier # 產出受電力和士氣影響
+            net_production = production[res] * power_deficit_ratio * morale_modifier
             net_consumption = consumption.get(res, 0)
             st.session_state.resources[res] += net_production - net_consumption
 
