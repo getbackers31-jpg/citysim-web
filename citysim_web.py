@@ -296,4 +296,4 @@ def check_game_status():
 
 if __name__ == "__main__":
     main()
-�
+
