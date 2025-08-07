@@ -176,3 +176,5 @@ def run_next_day_simulation():
             if random.random() < 0.08:
                 st.session_state.population += 1
                 log_event("🍼 好消息！一位新的殖民者誕生了！")
+                if __name__ == "__main__":
+    main()
