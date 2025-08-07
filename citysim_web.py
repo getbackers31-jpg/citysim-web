@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v2.2 (科研系統)
+# 🚀 火星殖民地計畫 v2.3 (最終穩定版)
 import streamlit as st
 import random
 
@@ -14,7 +14,6 @@ BUILDING_SPECS = {
     "居住艙": {"cost": {"鋼材": 120}, "provides": "人口容量", "capacity": 5, "consumes": {"電力": 1}, "workers_needed": 0},
     "精煉廠": {"cost": {"鋼材": 150}, "produces": {"鋼材": 10}, "consumes": {"電力": 4}, "workers_needed": 1},
     "核融合發電廠": {"cost": {"鋼材": 400}, "produces": {"電力": 50}, "consumes": {}, "workers_needed": 0},
-    # *** 新增科研建築 ***
     "科研中心": {"cost": {"鋼材": 200}, "produces": {"科研點數": 2}, "consumes": {"電力": 5}, "workers_needed": 1},
 }
 
@@ -65,12 +64,36 @@ def initialize_game():
         st.session_state.victory = False
         
         st.session_state.special_event_effect = {}
-        st.session_state.tech_tree = TECH_TREE.copy()
+        # 使用深拷貝以避免後續修改影響到原始定義
+        st.session_state.tech_tree = {k: v.copy() for k, v in TECH_TREE.items()}
+
+
+# --- 核心邏輯輔助函式 ---
+def sanitize_game_state():
+    """
+    確保遊戲狀態合法。此函式會在每次畫面刷新開始時執行，以防止因狀態不一致導致的錯誤。
+    """
+    # 校正工人指派數量
+    for name, current_assignment in st.session_state.worker_assignments.items():
+        spec = BUILDING_SPECS.get(name)
+        if not spec or spec["workers_needed"] == 0:
+            continue
+        
+        max_workers_for_building = st.session_state.buildings.get(name, 0) * spec["workers_needed"]
+        
+        if current_assignment > max_workers_for_building:
+            st.session_state.worker_assignments[name] = max_workers_for_building
+    
+    # 確保資源不會是負數
+    for resource, value in st.session_state.resources.items():
+        if value < 0:
+            st.session_state.resources[resource] = 0
 
 
 # --- 遊戲主函式 ---
 def main():
     initialize_game()
+    sanitize_game_state() # *** 徹底修正：在渲染任何UI前，先校正遊戲狀態 ***
     
     st.title("🚀 火星殖民地計畫")
     st.markdown("---")
@@ -87,7 +110,7 @@ def main():
         display_dashboard()
         display_worker_assignment_panel()
         display_construction_panel()
-        display_research_panel() # 新增科研面板
+        display_research_panel()
     with col2:
         display_status_panel()
         display_event_log()
@@ -118,19 +141,12 @@ def display_worker_assignment_panel():
     """顯示工人指派面板"""
     st.header("🧑‍🏭 殖民者指派中心")
     
-    for name, current_assignment in st.session_state.worker_assignments.items():
-        spec = BUILDING_SPECS.get(name)
-        if not spec or spec["workers_needed"] == 0: continue
-        max_workers_for_building = st.session_state.buildings.get(name, 0) * spec["workers_needed"]
-        if current_assignment > max_workers_for_building:
-            st.session_state.worker_assignments[name] = max_workers_for_building
-
     total_assigned_workers = sum(st.session_state.worker_assignments.values())
     unassigned_workers = st.session_state.population - total_assigned_workers
     
     st.info(f"可用殖民者: **{unassigned_workers}** / 已指派: **{total_assigned_workers}** / 總人口: **{st.session_state.population}**")
 
-    worker_cols = st.columns(4) # 增加一欄給科研中心
+    worker_cols = st.columns(4)
     
     assignable_buildings = {name: spec for name, spec in BUILDING_SPECS.items() if spec["workers_needed"] > 0}
     
@@ -138,13 +154,12 @@ def display_worker_assignment_panel():
         max_workers_for_building = st.session_state.buildings[name] * spec["workers_needed"]
         current_assignment = st.session_state.worker_assignments.get(name, 0)
         
-        safe_value = min(current_assignment, max_workers_for_building)
-        
+        # 因為狀態已在 main() 中被校正，這裡的 value 永遠是合法的
         new_assignment = worker_cols[i].slider(
             f"指派至 {name} (容量: {max_workers_for_building})",
             min_value=0,
             max_value=max_workers_for_building,
-            value=safe_value,
+            value=current_assignment,
             key=f"assign_{name}"
         )
         st.session_state.worker_assignments[name] = new_assignment
@@ -162,7 +177,6 @@ def display_construction_panel():
     for i, (name, spec) in enumerate(BUILDING_SPECS.items()):
         with cols[i]:
             
-            # 應用科技效果
             cost_multiplier = 1.0
             if st.session_state.tech_tree["強化鋼材"]["unlocked"]:
                 cost_multiplier = st.session_state.tech_tree["強化鋼材"]["effect"]["multiplier"]
@@ -249,7 +263,7 @@ def display_victory_screen():
     st.success(f"### 任務成功！")
     st.balloons()
     st.markdown(f"你在 **{st.session_state.game_day}** 天內成功建立了擁有 **{st.session_state.population}** 位居民的自給自足殖民地！")
-    if st.button("� 開啟新的殖民計畫"):
+    if st.button("🚀 開啟新的殖民計畫"):
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
@@ -293,7 +307,6 @@ def run_next_day_simulation():
     production = {res: 0.0 for res in st.session_state.resources}
     prod_buff = event_effect.get('production_buff', 1.0)
 
-    # 應用科技加成
     tech_bonuses = {}
     for tech_name, tech_data in st.session_state.tech_tree.items():
         if tech_data["unlocked"]:
@@ -302,7 +315,6 @@ def run_next_day_simulation():
                 tech_bonuses.setdefault(effect["building"], {}).setdefault(effect["resource"], 1.0)
                 tech_bonuses[effect["building"]][effect["resource"]] *= effect["multiplier"]
 
-    # 被動生產
     for name in ["太陽能板", "核融合發電廠"]:
         count = st.session_state.buildings[name]
         spec = BUILDING_SPECS[name]
@@ -311,7 +323,6 @@ def run_next_day_simulation():
                 bonus = tech_bonuses.get(name, {}).get(res, 1.0)
                 production[res] += amount * count * prod_buff * bonus
 
-    # 主動生產
     if not event_effect.get('strike'):
         for name, workers in st.session_state.worker_assignments.items():
             if event_effect.get('broken') == name: continue
