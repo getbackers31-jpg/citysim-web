@@ -58,7 +58,7 @@ def main():
     initialize_game()
     sanitize_worker_assignments() # *** BUG 修正：在渲染任何UI前，先校正遊戲狀態 ***
     
-    st.title("🚀 火星殖民地計畫")
+    st.title("� 火星殖民地計畫")
     st.markdown("---")
 
     if st.session_state.game_over:
