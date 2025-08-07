@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v2.1 (最終穩定版)
+# 🚀 火星殖民地計畫 v2.2 (科研系統)
 import streamlit as st
 import random
 
@@ -14,7 +14,17 @@ BUILDING_SPECS = {
     "居住艙": {"cost": {"鋼材": 120}, "provides": "人口容量", "capacity": 5, "consumes": {"電力": 1}, "workers_needed": 0},
     "精煉廠": {"cost": {"鋼材": 150}, "produces": {"鋼材": 10}, "consumes": {"電力": 4}, "workers_needed": 1},
     "核融合發電廠": {"cost": {"鋼材": 400}, "produces": {"電力": 50}, "consumes": {}, "workers_needed": 0},
+    # *** 新增科研建築 ***
+    "科研中心": {"cost": {"鋼材": 200}, "produces": {"科研點數": 2}, "consumes": {"電力": 5}, "workers_needed": 1},
 }
+
+# 科技樹
+TECH_TREE = {
+    "改良太陽能板": {"cost": 50, "description": "所有太陽能板電力產出 +20%", "effect": {"building": "太陽能板", "resource": "電力", "multiplier": 1.2}, "unlocked": False},
+    "水培農業": {"cost": 80, "description": "所有溫室食物產出 +30%", "effect": {"building": "溫室", "resource": "食物", "multiplier": 1.3}, "unlocked": False},
+    "強化鋼材": {"cost": 120, "description": "所有建築的鋼材成本 -15%", "effect": {"cost_reduction": "鋼材", "multiplier": 0.85}, "unlocked": False},
+}
+
 
 # 殖民者消耗
 COLONIST_CONSUMPTION = {
@@ -34,18 +44,19 @@ def initialize_game():
         
         st.session_state.resources = {
             "電力": 20.0, "水源": 50.0, "食物": 50.0,
-            "氧氣": 100.0, "鋼材": 500.0,
+            "氧氣": 100.0, "鋼材": 500.0, "科研點數": 0.0,
         }
         
         st.session_state.buildings = {
             "太陽能板": 1, "鑽井機": 1, "溫室": 1,
-            "居住艙": 1, "精煉廠": 0, "核融合發電廠": 0,
+            "居住艙": 1, "精煉廠": 0, "核融合發電廠": 0, "科研中心": 0,
         }
 
         st.session_state.worker_assignments = {
             "鑽井機": 1,
             "溫室": 1,
             "精煉廠": 0,
+            "科研中心": 0,
         }
         
         st.session_state.event_log = ["🚀 登陸成功！火星殖民地計畫正式開始！"]
@@ -54,6 +65,7 @@ def initialize_game():
         st.session_state.victory = False
         
         st.session_state.special_event_effect = {}
+        st.session_state.tech_tree = TECH_TREE.copy()
 
 
 # --- 遊戲主函式 ---
@@ -75,6 +87,7 @@ def main():
         display_dashboard()
         display_worker_assignment_panel()
         display_construction_panel()
+        display_research_panel() # 新增科研面板
     with col2:
         display_status_panel()
         display_event_log()
@@ -84,12 +97,13 @@ def display_dashboard():
     """顯示主要的資源儀表板"""
     st.header("📊 資源儀表板")
     res = st.session_state.resources
-    cols = st.columns(5)
+    cols = st.columns(6)
     cols[0].metric("⚡ 電力", f"{res['電力']:.1f}")
     cols[1].metric("💧 水源", f"{res['水源']:.1f}")
     cols[2].metric("🌿 食物", f"{res['食物']:.1f}")
     cols[3].metric("💨 氧氣", f"{res['氧氣']:.1f}")
     cols[4].metric("🔩 鋼材", f"{res['鋼材']:.1f}")
+    cols[5].metric("🔬 科研點數", f"{res['科研點數']:.1f}")
 
     max_resource_for_progress = 200.0
     food_progress = max(0.0, min(1.0, res['食物'] / max_resource_for_progress))
@@ -104,7 +118,6 @@ def display_worker_assignment_panel():
     """顯示工人指派面板"""
     st.header("🧑‍🏭 殖民者指派中心")
     
-    # 每次渲染前都校正工人指派，確保數據一致性
     for name, current_assignment in st.session_state.worker_assignments.items():
         spec = BUILDING_SPECS.get(name)
         if not spec or spec["workers_needed"] == 0: continue
@@ -117,7 +130,7 @@ def display_worker_assignment_panel():
     
     st.info(f"可用殖民者: **{unassigned_workers}** / 已指派: **{total_assigned_workers}** / 總人口: **{st.session_state.population}**")
 
-    worker_cols = st.columns(3)
+    worker_cols = st.columns(4) # 增加一欄給科研中心
     
     assignable_buildings = {name: spec for name, spec in BUILDING_SPECS.items() if spec["workers_needed"] > 0}
     
@@ -148,21 +161,52 @@ def display_construction_panel():
     cols = st.columns(len(BUILDING_SPECS))
     for i, (name, spec) in enumerate(BUILDING_SPECS.items()):
         with cols[i]:
-            can_build = all(st.session_state.resources[res] >= cost for res, cost in spec["cost"].items())
+            
+            # 應用科技效果
+            cost_multiplier = 1.0
+            if st.session_state.tech_tree["強化鋼材"]["unlocked"]:
+                cost_multiplier = st.session_state.tech_tree["強化鋼材"]["effect"]["multiplier"]
+
+            actual_cost = {res: cost * cost_multiplier for res, cost in spec["cost"].items()}
+            
+            can_build = all(st.session_state.resources[res] >= cost for res, cost in actual_cost.items())
+            
             if st.button(f"建造 {name}", key=f"build_{name}", disabled=not can_build, use_container_width=True):
-                for res, cost in spec["cost"].items(): st.session_state.resources[res] -= cost
+                for res, cost in actual_cost.items(): st.session_state.resources[res] -= cost
                 st.session_state.buildings[name] += 1
                 if spec.get("provides") == "人口容量": st.session_state.population_capacity += spec["capacity"]
                 log_event(f"✅ 成功建造了一座新的 {name}！")
                 st.rerun()
 
-            cost_str = ", ".join([f"{v} {k}" for k, v in spec['cost'].items()])
+            cost_str = ", ".join([f"{v:.0f} {k}" for k, v in actual_cost.items()])
             st.markdown(f"**成本:** {cost_str}")
             if "produces" in spec:
                 prod_str = ", ".join([f"+{v} {k}/天" for k, v in spec['produces'].items()])
                 st.markdown(f"**產出:** {prod_str}")
             if "provides" in spec:
                  st.markdown(f"**提供:** +{spec['capacity']} 人口容量")
+
+def display_research_panel():
+    """顯示科研面板"""
+    st.header("🔬 科研中心")
+    st.write("使用科研點數解鎖永久升級。")
+    
+    tech_cols = st.columns(len(st.session_state.tech_tree))
+    for i, (name, tech) in enumerate(st.session_state.tech_tree.items()):
+        with tech_cols[i]:
+            if tech["unlocked"]:
+                st.success(f"✅ {name}")
+                st.markdown(f"_{tech['description']}_")
+            else:
+                can_research = st.session_state.resources["科研點數"] >= tech["cost"]
+                if st.button(f"研究 {name}", key=f"research_{name}", disabled=not can_research, use_container_width=True):
+                    st.session_state.resources["科研點數"] -= tech["cost"]
+                    st.session_state.tech_tree[name]["unlocked"] = True
+                    log_event(f"🔬 科研突破！成功研發了 {name}！")
+                    st.rerun()
+                st.markdown(f"**成本:** {tech['cost']} 科研點數")
+                st.markdown(f"**效果:** {tech['description']}")
+    st.markdown("---")
 
 def display_status_panel():
     """顯示殖民地狀態和推進按鈕"""
@@ -205,7 +249,7 @@ def display_victory_screen():
     st.success(f"### 任務成功！")
     st.balloons()
     st.markdown(f"你在 **{st.session_state.game_day}** 天內成功建立了擁有 **{st.session_state.population}** 位居民的自給自足殖民地！")
-    if st.button("🚀 開啟新的殖民計畫"):
+    if st.button("� 開啟新的殖民計畫"):
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
@@ -249,20 +293,33 @@ def run_next_day_simulation():
     production = {res: 0.0 for res in st.session_state.resources}
     prod_buff = event_effect.get('production_buff', 1.0)
 
+    # 應用科技加成
+    tech_bonuses = {}
+    for tech_name, tech_data in st.session_state.tech_tree.items():
+        if tech_data["unlocked"]:
+            effect = tech_data["effect"]
+            if "building" in effect:
+                tech_bonuses.setdefault(effect["building"], {}).setdefault(effect["resource"], 1.0)
+                tech_bonuses[effect["building"]][effect["resource"]] *= effect["multiplier"]
+
+    # 被動生產
     for name in ["太陽能板", "核融合發電廠"]:
         count = st.session_state.buildings[name]
         spec = BUILDING_SPECS[name]
         if "produces" in spec:
             for res, amount in spec["produces"].items():
-                production[res] += amount * count * prod_buff
+                bonus = tech_bonuses.get(name, {}).get(res, 1.0)
+                production[res] += amount * count * prod_buff * bonus
 
+    # 主動生產
     if not event_effect.get('strike'):
         for name, workers in st.session_state.worker_assignments.items():
             if event_effect.get('broken') == name: continue
             spec = BUILDING_SPECS[name]
             if "produces" in spec:
                 for res, amount in spec["produces"].items():
-                    production[res] += amount * workers * prod_buff
+                    bonus = tech_bonuses.get(name, {}).get(res, 1.0)
+                    production[res] += amount * workers * prod_buff * bonus
 
     # 2. 計算消耗
     consumption = {res: 0.0 for res in st.session_state.resources}
@@ -285,12 +342,6 @@ def run_next_day_simulation():
             damaged_building = random.choice(buildings_available)
             st.session_state.buildings[damaged_building] -= 1
             log_event(f"💥 隕石撞擊！一座 {damaged_building} 被摧毀了！")
-            # *** BUG 修正 v1.8：在事件發生當下立刻校正狀態 ***
-            spec = BUILDING_SPECS[damaged_building]
-            new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
-            if st.session_state.worker_assignments[damaged_building] > new_max_workers:
-                st.session_state.worker_assignments[damaged_building] = new_max_workers
-
 
     # 4. 更新士氣
     morale_change = 0
@@ -314,7 +365,7 @@ def run_next_day_simulation():
             power_deficit_ratio = 0
         st.session_state.resources["電力"] = 0
 
-    for res in ["水源", "食物", "氧氣", "鋼材"]:
+    for res in ["水源", "食物", "氧氣", "鋼材", "科研點數"]:
         if res in production:
             net_production = production[res] * power_deficit_ratio * morale_modifier
             net_consumption = consumption.get(res, 0)
