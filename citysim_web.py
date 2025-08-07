@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.2
+# 🚀 火星殖民地計畫 v1.3
 import streamlit as st
 import random
 
@@ -12,8 +12,9 @@ BUILDING_SPECS = {
     "鑽井機": {"cost": {"鋼材": 80}, "produces": {"水源": 3}, "consumes": {"電力": 2}},
     "溫室": {"cost": {"鋼材": 100}, "produces": {"食物": 2, "氧氣": 3}, "consumes": {"電力": 1, "水源": 1}},
     "居住艙": {"cost": {"鋼材": 120}, "provides": "人口容量", "capacity": 5, "consumes": {"電力": 1}},
-    # *** 新增建築 ***
     "精煉廠": {"cost": {"鋼材": 150}, "produces": {"鋼材": 10}, "consumes": {"電力": 4}},
+    # *** 新增高階建築 ***
+    "核融合發電廠": {"cost": {"鋼材": 400}, "produces": {"電力": 50}, "consumes": {}},
 }
 
 # 殖民者消耗
@@ -46,8 +47,9 @@ def initialize_game():
             "鑽井機": 1,
             "溫室": 1,
             "居住艙": 1,
-            # *** 新增建築 ***
             "精煉廠": 0,
+            # *** 新增建築 ***
+            "核融合發電廠": 0,
         }
         
         st.session_state.event_log = ["🚀 登陸成功！火星殖民地計畫正式開始！"]
@@ -243,13 +245,11 @@ def run_next_day_simulation():
     else:
         power_deficit_ratio = 1.0
 
-    # *** 邏輯修正 ***
     # 更新所有受電力影響的資源，包括鋼材
     for res in ["水源", "食物", "氧氣", "鋼材"]:
-        # 確保 production 字典中有這個鍵
         if res in production:
             net_production = production[res] * power_deficit_ratio
-            net_consumption = consumption.get(res, 0) # 消費可能不存在，預設為0
+            net_consumption = consumption.get(res, 0)
             st.session_state.resources[res] += net_production - net_consumption
 
     # 4. 人口增長
