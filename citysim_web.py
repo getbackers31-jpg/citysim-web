@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.1
+# 🚀 火星殖民地計畫 v1.2
 import streamlit as st
 import random
 
@@ -12,6 +12,8 @@ BUILDING_SPECS = {
     "鑽井機": {"cost": {"鋼材": 80}, "produces": {"水源": 3}, "consumes": {"電力": 2}},
     "溫室": {"cost": {"鋼材": 100}, "produces": {"食物": 2, "氧氣": 3}, "consumes": {"電力": 1, "水源": 1}},
     "居住艙": {"cost": {"鋼材": 120}, "provides": "人口容量", "capacity": 5, "consumes": {"電力": 1}},
+    # *** 新增建築 ***
+    "精煉廠": {"cost": {"鋼材": 150}, "produces": {"鋼材": 10}, "consumes": {"電力": 4}},
 }
 
 # 殖民者消耗
@@ -44,6 +46,8 @@ def initialize_game():
             "鑽井機": 1,
             "溫室": 1,
             "居住艙": 1,
+            # *** 新增建築 ***
+            "精煉廠": 0,
         }
         
         st.session_state.event_log = ["🚀 登陸成功！火星殖民地計畫正式開始！"]
@@ -91,9 +95,6 @@ def display_dashboard():
     cols[4].metric("🔩 鋼材", f"{res['鋼材']:.1f}")
 
     # 使用進度條視覺化關鍵生存資源
-    # *** BUG 修正 ***
-    # st.progress 的值必須在 0.0 到 1.0 之間。
-    # 我們設定一個合理的容量上限 (例如 200) 來計算百分比。
     max_resource_for_progress = 200.0
     food_progress = max(0.0, min(1.0, res['食物'] / max_resource_for_progress))
     water_progress = max(0.0, min(1.0, res['水源'] / max_resource_for_progress))
@@ -234,7 +235,6 @@ def run_next_day_simulation():
     
     if st.session_state.resources["電力"] < 0:
         log_event("🚨 電力嚴重短缺！部分設施停止運作！")
-        # 修正：確保 consumption['電力'] 不為零，避免除零錯誤
         if consumption["電力"] > 0:
             power_deficit_ratio = max(0, (production["電力"] * event_modifier["電力"]) / consumption["電力"])
         else:
@@ -243,15 +243,17 @@ def run_next_day_simulation():
     else:
         power_deficit_ratio = 1.0
 
-    # 更新其他資源
-    for res in ["水源", "食物", "氧氣"]:
-        net_production = production[res] * power_deficit_ratio
-        net_consumption = consumption[res]
-        st.session_state.resources[res] += net_production - net_consumption
+    # *** 邏輯修正 ***
+    # 更新所有受電力影響的資源，包括鋼材
+    for res in ["水源", "食物", "氧氣", "鋼材"]:
+        # 確保 production 字典中有這個鍵
+        if res in production:
+            net_production = production[res] * power_deficit_ratio
+            net_consumption = consumption.get(res, 0) # 消費可能不存在，預設為0
+            st.session_state.resources[res] += net_production - net_consumption
 
     # 4. 人口增長
     if st.session_state.population < st.session_state.population_capacity:
-        # 資源充足時才有機會增加人口
         if st.session_state.resources["食物"] > st.session_state.population and st.session_state.resources["水源"] > st.session_state.population:
              if random.random() < 0.08: # 8% 機率增加一位殖民者
                  st.session_state.population += 1
