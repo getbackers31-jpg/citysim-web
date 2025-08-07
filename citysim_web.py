@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.8 (優化穩定版)
+# 🚀 火星殖民地計畫 v1.8 (超穩定優化版)
 import streamlit as st
 import random
 
@@ -106,11 +106,16 @@ def display_worker_assignment_panel():
     st.info(f"可用殖民者: **{unassigned_workers}** / 已指派: **{total_assigned_workers}** / 總人口: **{st.session_state.population}**")
     worker_cols = st.columns(3)
     assignable_buildings = {name: spec for name, spec in BUILDING_SPECS.items() if spec["workers_needed"] > 0}
-    for i, (name, spec) in enumerate(assignable_buildings.items()):
+    col_idx = 0  # 用來安全索引 worker_cols
+    for name, spec in assignable_buildings.items():
         max_workers_for_building = st.session_state.buildings[name] * spec["workers_needed"]
+        # ★★ 修正：若容量為0，直接設為0且不顯示 slider
+        if max_workers_for_building == 0:
+            st.session_state.worker_assignments[name] = 0
+            continue
         current_assignment = st.session_state.worker_assignments.get(name, 0)
         safe_value = min(current_assignment, max_workers_for_building)
-        new_assignment = worker_cols[i].slider(
+        new_assignment = worker_cols[col_idx].slider(
             f"指派至 {name} (容量: {max_workers_for_building})",
             min_value=0,
             max_value=max_workers_for_building,
@@ -118,6 +123,7 @@ def display_worker_assignment_panel():
             key=f"assign_{name}"
         )
         st.session_state.worker_assignments[name] = new_assignment
+        col_idx += 1
     final_total_assigned = sum(st.session_state.worker_assignments.values())
     if final_total_assigned > st.session_state.population:
         st.error("警告：指派的殖民者總數超過了總人口！請重新分配。")
