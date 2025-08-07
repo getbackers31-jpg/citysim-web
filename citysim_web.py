@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.6 (穩定版)
+# 🚀 火星殖民地計畫 v1.7 (穩定版)
 import streamlit as st
 import random
 
@@ -42,7 +42,6 @@ def initialize_game():
             "居住艙": 1, "精煉廠": 0, "核融合發電廠": 0,
         }
 
-        # *** 新增工人指派系統 ***
         st.session_state.worker_assignments = {
             "鑽井機": 1,
             "溫室": 1,
@@ -57,6 +56,8 @@ def initialize_game():
 # --- 遊戲主函式 ---
 def main():
     initialize_game()
+    sanitize_worker_assignments() # *** BUG 修正：在渲染任何UI前，先校正遊戲狀態 ***
+    
     st.title("🚀 火星殖民地計畫")
     st.markdown("---")
 
@@ -70,11 +71,27 @@ def main():
     col1, col2 = st.columns([0.7, 0.3])
     with col1:
         display_dashboard()
-        display_worker_assignment_panel() # 新增工人指派面板
+        display_worker_assignment_panel()
         display_construction_panel()
     with col2:
         display_status_panel()
         display_event_log()
+
+# --- 核心邏輯輔助函式 ---
+def sanitize_worker_assignments():
+    """
+    確保工人指派狀態合法。
+    此函式會在每次畫面刷新開始時執行，以防止因狀態不一致導致的錯誤。
+    """
+    for name, current_assignment in st.session_state.worker_assignments.items():
+        spec = BUILDING_SPECS.get(name)
+        if not spec or spec["workers_needed"] == 0:
+            continue
+        
+        max_workers_for_building = st.session_state.buildings.get(name, 0) * spec["workers_needed"]
+        
+        if current_assignment > max_workers_for_building:
+            st.session_state.worker_assignments[name] = max_workers_for_building
 
 # --- UI 顯示元件 ---
 def display_dashboard():
@@ -101,8 +118,6 @@ def display_worker_assignment_panel():
     """顯示工人指派面板"""
     st.header("🧑‍🏭 殖民者指派中心")
     
-    # *** BUG 修正 v1.6：採用更穩定的邏輯 ***
-    # 1. 先計算總量
     total_assigned_workers = sum(st.session_state.worker_assignments.values())
     unassigned_workers = st.session_state.population - total_assigned_workers
     
@@ -113,27 +128,19 @@ def display_worker_assignment_panel():
     assignable_buildings = {name: spec for name, spec in BUILDING_SPECS.items() if spec["workers_needed"] > 0}
     
     for i, (name, spec) in enumerate(assignable_buildings.items()):
-        # 2. 計算單個建築的最大容量
         max_workers_for_building = st.session_state.buildings[name] * spec["workers_needed"]
         current_assignment = st.session_state.worker_assignments.get(name, 0)
-
-        # 3. 渲染前先校正狀態，避免因建築被毀導致 current_assignment > max_workers
-        safe_assignment = min(current_assignment, max_workers_for_building)
-        if safe_assignment != current_assignment:
-            st.session_state.worker_assignments[name] = safe_assignment
-            # 不需要 rerun，因為會在本次渲染中直接使用 safe_assignment
         
-        # 4. 渲染滑桿，其最大值僅由建築容量決定
+        # 因為狀態已在 main() 中被校正，這裡的 value 永遠是合法的
         new_assignment = worker_cols[i].slider(
             f"指派至 {name} (容量: {max_workers_for_building})",
             min_value=0,
-            max_value=max_workers_for_building, # 上限固定為建築容量
-            value=safe_assignment, # 使用校正後的值
+            max_value=max_workers_for_building,
+            value=current_assignment,
             key=f"assign_{name}"
         )
         st.session_state.worker_assignments[name] = new_assignment
 
-    # 5. 在所有滑桿渲染後，重新計算總量並顯示警告
     final_total_assigned = sum(st.session_state.worker_assignments.values())
     if final_total_assigned > st.session_state.population:
         st.error("警告：指派的殖民者總數超過了總人口！請重新分配。")
@@ -250,13 +257,7 @@ def run_next_day_simulation():
             damaged_building = random.choice(buildings_available)
             st.session_state.buildings[damaged_building] -= 1
             log_event(f"💥 隕石撞擊！一座 {damaged_building} 被摧毀了！")
-            
-            spec = BUILDING_SPECS[damaged_building]
-            new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
-            if st.session_state.worker_assignments[damaged_building] > new_max_workers:
-                freed_workers = st.session_state.worker_assignments[damaged_building] - new_max_workers
-                log_event(f"⚠️ 因 {damaged_building} 被毀，{freed_workers} 名殖民者變為未指派狀態。")
-                st.session_state.worker_assignments[damaged_building] = new_max_workers
+            # 狀態校正函式會在下次刷新時自動處理工人重新分配的問題
 
     # 4. 更新士氣
     morale_change = 0
