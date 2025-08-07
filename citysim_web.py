@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# � 火星殖民地計畫 v1.5
+# 🚀 火星殖民地計畫 v1.5
 import streamlit as st
 import random
 
@@ -114,14 +114,17 @@ def display_worker_assignment_panel():
         max_workers_for_building = st.session_state.buildings[name] * spec["workers_needed"]
         current_assignment = st.session_state.worker_assignments.get(name, 0)
 
-        # 確保滑桿的最大值考慮了未分配的工人和當前已分配的工人
-        slider_max = current_assignment + unassigned_workers
+        # *** BUG 修正 ***
+        # 核心問題：當 unassigned_workers 為負數時，slider_max 可能會小於 current_assignment，導致崩潰。
+        # 解決方案：計算可用於此滑塊的工人時，只考慮真正未分配的工人（大於等於0）。
+        truly_unassigned_workers = max(0, unassigned_workers)
+        slider_max = current_assignment + truly_unassigned_workers
         
         new_assignment = worker_cols[i].slider(
             f"指派至 {name} (上限: {max_workers_for_building})",
             min_value=0,
             max_value=min(max_workers_for_building, slider_max),
-            value=current_assignment,
+            value=min(current_assignment, max_workers_for_building), # 確保初始值也不會超過建築容量
             key=f"assign_{name}"
         )
         st.session_state.worker_assignments[name] = new_assignment
@@ -245,7 +248,7 @@ def run_next_day_simulation():
             st.session_state.buildings[damaged_building] -= 1
             log_event(f"💥 隕石撞擊！一座 {damaged_building} 被摧毀了！")
             
-            # *** BUG 修正：如果被摧毀的建築有工人，需要重新分配 ***
+            # 如果被摧毀的建築有工人，需要重新分配
             if damaged_building in st.session_state.worker_assignments:
                 spec = BUILDING_SPECS[damaged_building]
                 new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
