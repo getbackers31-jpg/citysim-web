@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.4
+# � 火星殖民地計畫 v1.5
 import streamlit as st
 import random
 
@@ -99,7 +99,7 @@ def display_dashboard():
 
 def display_worker_assignment_panel():
     """顯示工人指派面板"""
-    st.header("🧑‍� 殖民者指派中心")
+    st.header("🧑‍🏭 殖民者指派中心")
     
     total_assigned_workers = sum(st.session_state.worker_assignments.values())
     unassigned_workers = st.session_state.population - total_assigned_workers
@@ -244,6 +244,15 @@ def run_next_day_simulation():
             damaged_building = random.choice(buildings_available)
             st.session_state.buildings[damaged_building] -= 1
             log_event(f"💥 隕石撞擊！一座 {damaged_building} 被摧毀了！")
+            
+            # *** BUG 修正：如果被摧毀的建築有工人，需要重新分配 ***
+            if damaged_building in st.session_state.worker_assignments:
+                spec = BUILDING_SPECS[damaged_building]
+                new_max_workers = st.session_state.buildings[damaged_building] * spec["workers_needed"]
+                if st.session_state.worker_assignments[damaged_building] > new_max_workers:
+                    freed_workers = st.session_state.worker_assignments[damaged_building] - new_max_workers
+                    log_event(f"⚠️ 因 {damaged_building} 被毀，{freed_workers} 名殖民者變為未指派狀態。")
+                    st.session_state.worker_assignments[damaged_building] = new_max_workers
 
     # 4. 更新士氣
     morale_change = 0
@@ -296,4 +305,3 @@ def check_game_status():
 
 if __name__ == "__main__":
     main()
-
