@@ -58,7 +58,7 @@ def main():
     initialize_game()
     sanitize_worker_assignments() # *** BUG 修正：在渲染任何UI前，先校正遊戲狀態 ***
     
-    st.title("� 火星殖民地計畫")
+    st.title("🚀 火星殖民地計畫")
     st.markdown("---")
 
     if st.session_state.game_over:
@@ -131,12 +131,14 @@ def display_worker_assignment_panel():
         max_workers_for_building = st.session_state.buildings[name] * spec["workers_needed"]
         current_assignment = st.session_state.worker_assignments.get(name, 0)
         
-        # 因為狀態已在 main() 中被校正，這裡的 value 永遠是合法的
+        # *** BUG 修正 v1.8：增加最終保險，確保 value 永遠不會大於 max_value ***
+        safe_value = min(current_assignment, max_workers_for_building)
+        
         new_assignment = worker_cols[i].slider(
             f"指派至 {name} (容量: {max_workers_for_building})",
             min_value=0,
             max_value=max_workers_for_building,
-            value=current_assignment,
+            value=safe_value, # 使用這個絕對安全的值
             key=f"assign_{name}"
         )
         st.session_state.worker_assignments[name] = new_assignment
@@ -292,7 +294,7 @@ def run_next_day_simulation():
         if st.session_state.resources["食物"] > st.session_state.population and st.session_state.resources["水源"] > st.session_state.population:
              if random.random() < 0.08:
                  st.session_state.population += 1
-                 log_event("🎉 好消息！一位新的殖民者誕生了！")
+                 log_event("� 好消息！一位新的殖民者誕生了！")
 
 def check_game_status():
     res = st.session_state.resources
