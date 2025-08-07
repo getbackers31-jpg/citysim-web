@@ -6,7 +6,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from collections import deque
+import json # 引入 json 庫，用於處理日誌中的複雜結構
 
+# 設定 Streamlit 頁面配置
 st.set_page_config(page_title="🌐 CitySim 世界模擬器 Pro", layout="wide")
 
 # --- 自訂 CSS 樣式 ---
@@ -38,317 +40,342 @@ st.markdown("""
     }
     div.stButton > button:first-child:hover {
         background-color: #45a049;
-        box-shadow: 0 6px 12px 0 rgba(0,0,0,0.25);
-        transform: translateY(-2px);
+        transform: scale(1.05);
     }
-    
-    /* 資訊框樣式 */
-    .stAlert {
-        border-radius: 10px;
-    }
-    
-    /* 容器樣式 */
+    /* 區塊樣式 */
     .stContainer {
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #e6e6e6;
+        border-radius: 15px;
+        padding: 20px;
+        background-color: #f0f2f6;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         margin-bottom: 20px;
-    }
-
-    /* 表格樣式 */
-    .dataframe {
-        font-size: 14px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 核心模擬器物件 (簡化版) ---
-class Government:
+# 模擬核心：定義物件導向的類別
+class PoliticalParty:
     def __init__(self, name, ideology):
         self.name = name
-        self.ideology = ideology # e.g., '社會主義', '資本主義', '民主'
-        self.leader = f"{self.name} 領袖"
-        self.policies = {
-            '稅收': random.uniform(0.1, 0.5),
-            '公共支出': random.uniform(0.1, 0.5),
-        }
-
-class Technology:
-    def __init__(self, name, level=0):
-        self.name = name
-        self.level = level
-
-class Party:
-    def __init__(self, name, ideology):
-        self.name = name
-        self.ideology = ideology
-        self.popularity = random.uniform(0, 1)
-
-class City:
-    def __init__(self, name, population):
-        self.name = name
-        self.population = population
-        self.resources = {'金錢': 1000, '能源': 500, '稅收': 0}
-        self.specialization = "未設定"
-        self.mass_movement_active = False
-        self.cooperative_economy_level = 0.0
-        self.government_type = "共和國"
-        self.ruling_party = None
-
-    def update_economy(self, planet_techs, global_events):
-        # 簡化經濟模型
-        self.resources['金錢'] += (self.population * 0.1)
-        self.resources['能源'] -= (self.population * 0.05)
-        self.resources['稅收'] = self.population * self.ruling_party.policies.get('稅收', 0.2) if self.ruling_party else self.population * 0.2
-        self.resources['金錢'] += self.resources['稅收']
-        
-        # 考慮合作經濟
-        coop_bonus = self.cooperative_economy_level * 0.1
-        self.resources['金錢'] *= (1 + coop_bonus)
+        self.ideology = ideology  # e.g., '自由主義', '社會主義', '保守主義'
+        self.popularity = random.uniform(0.1, 0.5)
 
 class Planet:
     def __init__(self, name):
         self.name = name
         self.cities = []
-        self.tech_levels = {'軍事': 0, '環境': 0, '醫療': 0, '生產': 0}
-        self.pollution = 0
-        self.conflict_level = 0
+        self.population = 0
+        self.tech_levels = {
+            '軍事': random.uniform(1.0, 5.0),
+            '環境': random.uniform(1.0, 5.0),
+            '醫療': random.uniform(1.0, 5.0),
+            '生產': random.uniform(1.0, 5.0)
+        }
+        self.pollution = random.uniform(0.1, 1.0)
+        self.conflict_level = random.uniform(0.0, 0.5)
         self.defense_level = 0
+        self.total_tax_revenue = 0
+        self.total_resource_output = 0
 
     def add_city(self, city):
         self.cities.append(city)
+        self.population += city.population
 
-    def update_tech(self):
-        # 科技隨時間緩慢增長
+    def update_planet_stats(self):
+        self.population = sum(city.population for city in self.cities)
+        self.total_tax_revenue = sum(city.resources['稅收'] for city in self.cities)
+        self.total_resource_output = sum(city.resources['食物'] + city.resources['能源'] for city in self.cities)
+        # 更新星球科技水平
         for tech in self.tech_levels:
-            self.tech_levels[tech] += random.uniform(0.01, 0.05)
-    
-    def check_conflict(self):
-        if self.conflict_level > 0.8:
-            return "全面戰爭爆發！"
-        elif self.conflict_level > 0.5:
-            return "區域衝突加劇！"
-        return None
+            self.tech_levels[tech] = sum(city.tech_level[tech] for city in self.cities) / len(self.cities) if self.cities else 0
+        # 更新污染和衝突等級
+        self.pollution = sum(city.pollution for city in self.cities) / len(self.cities) if self.cities else 0
+        self.conflict_level = sum(city.conflict_level for city in self.cities) / len(self.cities) if self.cities else 0
+
+class City:
+    def __init__(self, name, population, planet_name, specialization=None):
+        self.name = name
+        self.population = population
+        self.planet_name = planet_name
+        self.year_established = 0
+        self.specialization = specialization if specialization else random.choice(['工業', '農業', '科技', '服務'])
+        self.happiness = random.uniform(0.5, 1.0)
+        self.crime_rate = random.uniform(0.1, 0.5)
+        self.pollution = random.uniform(0.1, 0.5)
+        self.cooperative_economy_level = random.uniform(0.0, 0.3)
+        self.mass_movement_active = False
+        self.mass_movement_progress = 0
+        self.conflict_level = 0
+        self.government_type = random.choice(['民主', '專制', '寡頭'])
+        self.political_parties = [
+            PoliticalParty('自由黨', '自由主義'),
+            PoliticalParty('工黨', '社會主義'),
+            PoliticalParty('保守黨', '保守主義')
+        ]
+        self.ruling_party = random.choice(self.political_parties)
+        self.resources = {
+            '食物': population * random.uniform(0.8, 1.2),
+            '能源': population * random.uniform(0.5, 1.5),
+            '稅收': 0,
+        }
+        self.tech_level = {
+            '軍事': random.uniform(1.0, 5.0),
+            '環境': random.uniform(1.0, 5.0),
+            '醫療': random.uniform(1.0, 5.0),
+            '生產': random.uniform(1.0, 5.0)
+        }
+        self.city_log = []
+
+    def update_resources(self):
+        # 根據特化調整資源產出
+        if self.specialization == '工業':
+            self.resources['能源'] += self.population * random.uniform(0.2, 0.5)
+            self.resources['食物'] -= self.population * random.uniform(0.1, 0.2)
+            self.pollution += random.uniform(0.01, 0.05)
+        elif self.specialization == '農業':
+            self.resources['食物'] += self.population * random.uniform(0.3, 0.6)
+            self.resources['能源'] -= self.population * random.uniform(0.05, 0.1)
+        elif self.specialization == '科技':
+            self.tech_level['生產'] += random.uniform(0.01, 0.05)
+            self.tech_level['醫療'] += random.uniform(0.01, 0.05)
+        
+        # 基本資源消耗
+        self.resources['食物'] -= self.population * 0.2
+        self.resources['能源'] -= self.population * 0.15
+        self.resources['稅收'] = self.population * random.uniform(0.05, 0.1) * self.cooperative_economy_level
+        
+        # 確保資源不為負
+        for resource in self.resources:
+            self.resources[resource] = max(0, self.resources[resource])
+
+    def update_happiness(self):
+        # 幸福度受資源、污染、犯罪率影響
+        resource_factor = (self.resources['食物'] + self.resources['能源']) / self.population
+        self.happiness += (resource_factor - 1.0) * 0.05
+        self.happiness -= self.pollution * 0.1
+        self.happiness -= self.crime_rate * 0.2
+        self.happiness = max(0, min(1, self.happiness)) # 確保幸福度在 0 到 1 之間
+
+    def handle_mass_movement(self):
+        if self.happiness < 0.3 and not self.mass_movement_active:
+            self.mass_movement_active = True
+            self.mass_movement_progress = 0.1
+        
+        if self.mass_movement_active:
+            self.mass_movement_progress += (1 - self.happiness) * 0.1
+            if self.mass_movement_progress >= 1.0:
+                self.trigger_political_revolution()
+
+    def trigger_political_revolution(self):
+        old_ruling_party = self.ruling_party
+        new_ruling_party = random.choice([p for p in self.political_parties if p != old_ruling_party])
+        self.ruling_party = new_ruling_party
+        self.government_type = random.choice(['民主', '專制', '寡頭'])
+        self.mass_movement_active = False
+        self.mass_movement_progress = 0
+        self.city_log.append(f"政變！{old_ruling_party.name} 下台，{new_ruling_party.name} 執政，政體變為 {self.government_type}")
+
+    def update_tech_and_pollution(self, planet_techs):
+        # 城市的科技水準會隨著星球的平均水準而進步
+        for tech in self.tech_level:
+            self.tech_level[tech] += (planet_techs[tech] - self.tech_level[tech]) * 0.01
+        
+        # 污染處理
+        self.pollution += (self.resources['能源'] / self.population) * 0.01
+        self.pollution -= self.tech_level['環境'] * 0.01
+        self.pollution = max(0, self.pollution)
+
+    def generate_report(self):
+        # 生成城市年度報告
+        return {
+            '人口': self.population,
+            '幸福度': self.happiness,
+            '污染': self.pollution,
+            '政體': self.government_type,
+            '執政黨': self.ruling_party.name if self.ruling_party else '無',
+            '食物': self.resources['食物'],
+            '能源': self.resources['能源'],
+            '稅收': self.resources['稅收']
+        }
+
+    def update(self, planet_techs):
+        self.year_established += 1
+        self.population = int(self.population * random.uniform(1.01, 1.05))
+        self.update_resources()
+        self.update_happiness()
+        self.handle_mass_movement()
+        self.update_tech_and_pollution(planet_techs)
 
 class Galaxy:
     def __init__(self):
         self.planets = []
+        self.year = 0
+        self.history = {}
         self.global_events_log = deque(maxlen=20)
 
     def add_planet(self, planet):
         self.planets.append(planet)
 
-# --- 事件系統 (簡化) ---
-def generate_random_event(current_year, event_log):
-    event_types = ['經濟危機', '科技突破', '自然災害', '社會動盪', '全球峰會']
-    event_type = random.choice(event_types)
-    event_description = f"在 {current_year} 年發生了【{event_type}】事件。"
-    event_log.append(event_description)
-    return event_description
-
-def trigger_revolution(city, event_log):
-    if not city.mass_movement_active:
-        city.mass_movement_active = True
-        event_description = f"在 {city.name} 爆發了大規模群眾運動，政權面臨挑戰！"
-        event_log.append(event_description)
-        return event_description
-    return f"{city.name} 已有群眾運動，無需重複觸發。"
-
-def trigger_tech_boom(planet, event_log):
-    tech_type = random.choice(list(planet.tech_levels.keys()))
-    planet.tech_levels[tech_type] += 0.5 # 顯著提升
-    event_description = f"在 {planet.name} 發生了【{tech_type}】科技大爆發！"
-    event_log.append(event_description)
-    return event_description
-
-def simulate_step(galaxy):
-    event_log = []
-    for planet in galaxy.planets:
-        planet.update_tech()
-        planet.pollution += random.uniform(0.01, 0.03)
-        planet.conflict_level = min(1.0, planet.conflict_level + random.uniform(-0.01, 0.02))
-
-        for city in planet.cities:
-            # 簡化黨派和政策
-            if not city.ruling_party:
-                city.ruling_party = Party(f"{city.name}執政黨", "無黨派")
-            city.ruling_party.policies['稅收'] = random.uniform(0.1, 0.3)
-            city.update_economy(planet.tech_levels, event_log)
-    
-    if random.random() < 0.1: # 10%機率觸發全球事件
-        event_log.append(generate_random_event(st.session_state.current_year, st.session_state.temp_global_events))
-
-    st.session_state.current_year += 1
-    return event_log
-
-# --- Streamlit UI 函數 ---
-def create_dashboard(galaxy):
-    st.markdown("### 📊 模擬儀表板")
-    
-    # 科技與污染趨勢
-    tech_data = {
-        '年份': list(range(1, st.session_state.current_year + 1)),
-        '軍事科技': [0] * st.session_state.current_year,
-        '環境科技': [0] * st.session_state.current_year,
-        '污染': [0] * st.session_state.current_year
-    }
-    
-    # 填充數據（簡化，假設只有一個星球）
-    if galaxy.planets:
-        planet = galaxy.planets[0]
-        for i in range(st.session_state.current_year):
-            tech_data['軍事科技'][i] = planet.tech_levels['軍事'] * (i/st.session_state.current_year)
-            tech_data['環境科技'][i] = planet.tech_levels['環境'] * (i/st.session_state.current_year)
-            tech_data['污染'][i] = planet.pollution * (i/st.session_state.current_year)
-    
-    df_trends = pd.DataFrame(tech_data)
-    
-    fig = px.line(df_trends, x='年份', y=['軍事科技', '環境科技'], title='科技發展趨勢')
-    st.plotly_chart(fig, use_container_width=True)
-
-    fig2 = px.line(df_trends, x='年份', y='污染', title='全球污染趨勢')
-    st.plotly_chart(fig2, use_container_width=True)
-
-def create_city_comparison_table(galaxy):
-    all_city_data = []
-    for planet in galaxy.planets:
-        for city in planet.cities:
-            all_city_data.append({
-                "城市": city.name, "人口": city.population,
-                "金錢": city.resources['金錢'], "能源": city.resources['能源'], "稅收": city.resources['稅收'],
-                "產業專精": city.specialization,
-                "軍事科技": f"{planet.tech_levels['軍事']:.2f}", "環境科技": f"{planet.tech_levels['環境']:.2f}",
-                "醫療科技": f"{planet.tech_levels['醫療']:.2f}", "生產科技": f"{planet.tech_levels['生產']:.2f}",
-                "污染": f"{planet.pollution:.2f}", "衝突等級": f"{planet.conflict_level:.2f}",
-                "防禦等級": planet.defense_level,
-                "群眾運動": '是' if city.mass_movement_active else '否',
-                "合作經濟": f"{city.cooperative_economy_level:.2f}",
-                "政體": city.government_type,
-                "執政黨": city.ruling_party.name if city.ruling_party else '無'
-            })
-
-    if all_city_data:
-        df_cities = pd.DataFrame(all_city_data)
-        st.dataframe(df_cities.set_index("城市"))
-    else:
-        st.info("目前沒有城市數據可供對比。")
-
-
-# --- 主要應用程式邏輯 ---
-st.title("🌐 CitySim 世界模擬器 Pro")
-
-st.markdown("歡迎來到 CitySim！您是這個模擬世界的觀察者。透過設定參數並運行模擬，您可以觀察城市、星球和星系如何在時間的推移下演變。")
-
-# --- Session State 初始化 (修正錯誤的關鍵) ---
-# 確保所有 session state 變數在程式碼執行時都已經存在
-if 'galaxy' not in st.session_state:
-    st.session_state.galaxy = None
-if 'current_year' not in st.session_state:
-    st.session_state.current_year = 0
-if 'temp_global_events' not in st.session_state:
-    st.session_state.temp_global_events = []
-if 'is_running' not in st.session_state:
-    st.session_state.is_running = False
-
-# --- 參數設定 ---
-st.sidebar.markdown("### ⚙️ 模擬參數")
-if st.session_state.galaxy is None:
-    num_cities = st.sidebar.slider("城市數量", 1, 5, 2)
-    start_simulation_button = st.sidebar.button("啟動新模擬", key="start_sim")
-
-    if start_simulation_button:
-        # 建立模擬世界
-        new_galaxy = Galaxy()
-        planet_alpha = Planet("阿爾法星")
-        new_galaxy.add_planet(planet_alpha)
+    def simulate_year(self):
+        self.year += 1
         
-        for i in range(num_cities):
-            city_name = f"城市-{i+1}"
-            population = random.randint(100000, 500000)
-            new_city = City(city_name, population)
-            new_city.specialization = random.choice(['工業', '農業', '科技', '商業'])
-            new_city.cooperative_economy_level = random.uniform(0, 1)
-            new_city.government_type = random.choice(["共和國", "邦聯", "社會主義"])
-            planet_alpha.add_city(new_city)
+        # 模擬每個星球
+        for planet in self.planets:
+            planet.update_planet_stats()
+            # 模擬星球上的每個城市
+            for city in planet.cities:
+                city.update(planet.tech_levels)
+                
+            # 隨機事件 (星球層級)
+            if random.random() < 0.1: # 10% 機率觸發事件
+                self.trigger_planet_event(planet)
+        
+        self.history[self.year] = {
+            'total_population': sum(p.population for p in self.planets),
+            'total_tax_revenue': sum(p.total_tax_revenue for p in self.planets),
+            'total_resource_output': sum(p.total_resource_output for p in self.planets),
+            'avg_tech_level': sum(p.tech_levels['生產'] for p in self.planets) / len(self.planets) if self.planets else 0,
+            'avg_pollution': sum(p.pollution for p in self.planets) / len(self.planets) if self.planets else 0
+        }
 
-        st.session_state.galaxy = new_galaxy
-        st.session_state.current_year = 0
-        st.session_state.is_running = True
-        st.experimental_rerun() # 重新執行以顯示模擬介面
+    def trigger_planet_event(self, planet):
+        event_type = random.choice(['科技大爆發', '環境危機', '星際貿易協定'])
+        event_report = ""
+        
+        if event_type == '科技大爆發':
+            tech = random.choice(list(planet.tech_levels.keys()))
+            planet.tech_levels[tech] *= 1.5
+            event_report = f"🤖 在 {planet.name} 發生了一場 {tech} 科技大爆發！該領域的科技水準大幅提升。"
+        elif event_type == '環境危機':
+            planet.pollution += random.uniform(0.5, 1.0)
+            event_report = f"🚨 {planet.name} 遭受了嚴重的環境危機，污染等級飆升！"
+        elif event_type == '星際貿易協定':
+            for city in planet.cities:
+                city.resources['食物'] *= 1.2
+                city.resources['能源'] *= 1.2
+            event_report = f"🤝 簽訂了星際貿易協定，{planet.name} 所有城市的資源產出增加！"
+            
+        self.global_events_log.append({
+            'year': self.year,
+            'event': event_report,
+            'type': event_type
+        })
 
-# --- 模擬控制 ---
-st.markdown("---")
-if st.session_state.galaxy and st.session_state.is_running:
-    st.markdown("### 🎮 模擬控制")
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
-    with col1:
-        if st.button("運行一年", help="推進模擬一年"):
-            simulation_result = simulate_step(st.session_state.galaxy)
-            st.info(f"模擬進入第 {st.session_state.current_year} 年。")
-            if simulation_result:
-                st.info("當年事件：\n- " + "\n- ".join(simulation_result))
-    with col2:
-        if st.button("重設模擬", help="回到初始狀態"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.session_state.is_running = False
-            st.experimental_rerun()
-    with col3:
-        if st.button("自動運行", help="自動運行模擬，直到手動停止"):
-            st.session_state.is_running = True
-    with col4:
-        if st.button("停止自動", help="停止自動運行模擬"):
-            st.session_state.is_running = False
+# --- Streamlit 應用介面 ---
+st.title('🌐 CitySim 世界模擬器 Pro')
 
-    # 自動運行邏輯
-    if st.session_state.is_running:
-        st.info("模擬正在自動運行...")
-        simulation_result = simulate_step(st.session_state.galaxy)
-        st.info(f"模擬進入第 {st.session_state.current_year} 年。")
-        if simulation_result:
-            st.info("當年事件：\n- " + "\n- ".join(simulation_result))
-        st.rerun()
+# 初始化模擬器
+if 'galaxy' not in st.session_state:
+    st.session_state.galaxy = Galaxy()
+    st.session_state.galaxy.add_planet(Planet('賽博坦星'))
+    st.session_state.galaxy.add_planet(Planet('諾瓦星'))
+    
+    # 在初始城市時，確保 `ruling_party` 存在
+    planet1 = st.session_state.galaxy.planets[0]
+    planet1.add_city(City('未來市', 100000, planet1.name, '科技'))
+    planet1.add_city(City('工業城', 150000, planet1.name, '工業'))
+    
+    planet2 = st.session_state.galaxy.planets[1]
+    planet2.add_city(City('綠蔭城', 80000, planet2.name, '農業'))
+    planet2.add_city(City('貿易港', 120000, planet2.name, '服務'))
+    
+    st.session_state.simulation_started = False
+    st.session_state.current_year = 0
 
-# --- 模擬結果顯示 ---
-if st.session_state.galaxy and st.session_state.current_year > 0:
+galaxy = st.session_state.galaxy
+current_year = st.session_state.current_year
+
+st.sidebar.title("控制面板")
+if st.sidebar.button("開始模擬"):
+    st.session_state.simulation_started = True
+    st.sidebar.success("模擬已啟動！")
+
+if st.sidebar.button("進行一年"):
+    if st.session_state.simulation_started:
+        st.session_state.galaxy.simulate_year()
+        st.session_state.current_year += 1
+        st.sidebar.info(f"成功模擬至第 {st.session_state.current_year} 年")
+    else:
+        st.sidebar.warning("請先點擊 '開始模擬' 按鈕")
+
+if st.sidebar.button("重設模擬"):
+    st.session_state.clear()
+    st.experimental_rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"**當前年份: {st.session_state.current_year}**")
+
+# 主頁面顯示
+if not st.session_state.simulation_started:
+    st.info("點擊左側控制面板的 '開始模擬' 按鈕來啟動未來世界的旅程！")
+else:
+    st.success(f"--- 模擬進行至第 {st.session_state.current_year} 年 ---")
+
+    # 顯示模擬數據總覽
+    if st.session_state.current_year > 0:
+        history_data = st.session_state.galaxy.history
+        df_history = pd.DataFrame(history_data).T
+        df_history.index.name = '年份'
+
+        st.markdown("## 📊 模擬數據總覽")
+        st.dataframe(df_history)
+
+        st.markdown("---")
+        st.markdown("## 📈 趨勢分析")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 總人口趨勢")
+            fig = px.line(df_history, y='total_population', title='總人口', labels={'total_population': '總人口'})
+            st.plotly_chart(fig)
+        with col2:
+            st.markdown("### 平均污染趨勢")
+            fig = px.line(df_history, y='avg_pollution', title='平均污染', labels={'avg_pollution': '平均污染'})
+            st.plotly_chart(fig)
+
     st.markdown("---")
-    st.markdown("## 📊 模擬結果")
-    st.markdown(f"### 目前年份: {st.session_state.current_year}")
-    
-    create_dashboard(st.session_state.galaxy)
-    
-    st.markdown("---")
-    st.markdown("## 🏙️ 城市數據對比")
-    create_city_comparison_table(st.session_state.galaxy)
-    
-    st.markdown("---")
-    st.markdown("## ⚙️ 手動事件觸發")
-    selected_city_for_event = st.selectbox(
-        "選擇要觸發事件的城市", 
-        [city.name for planet in st.session_state.galaxy.planets for city in planet.cities]
-    )
-
-    if st.button("觸發革命", key="trigger_rev"):
-        city_obj = next(
-            (city for planet in st.session_state.galaxy.planets for city in planet.cities if city.name == selected_city_for_event),
-            None
-        )
-        if city_obj:
-            # 這裡就是修正的關鍵，我們已經確保 temp_global_events 存在
-            st.info(trigger_revolution(city_obj, st.session_state.temp_global_events))
-    
-    if st.button("觸發科技大爆發", key="trigger_tech"):
-        planet_obj = st.session_state.galaxy.planets[0] # 假設只有一個星球
-        st.info(trigger_tech_boom(planet_obj, st.session_state.temp_global_events))
+    st.markdown("## 🪐 行星與城市資訊")
+    for planet in galaxy.planets:
+        st.markdown(f"### 🌏 {planet.name}")
+        with st.expander("點擊查看詳細資訊"):
+            st.write(f"**星球總人口**: {planet.population:,}")
+            st.write(f"**星球平均污染等級**: {planet.pollution:.2f}")
+            
+            st.markdown("#### 城市列表")
+            all_city_data = []
+            for city in planet.cities:
+                # 這裡修復了可能的 AttributeError，如果 ruling_party 為 None 則返回 '無'
+                ruling_party_name = city.ruling_party.name if city.ruling_party else '無'
+                all_city_data.append({
+                    "城市": city.name,
+                    "人口": city.population,
+                    "幸福度": f"{city.happiness:.2f}",
+                    "污染": f"{city.pollution:.2f}",
+                    "政體": city.government_type,
+                    "執政黨": ruling_party_name,
+                    "產業專精": city.specialization,
+                    "食物": f"{city.resources['食物']:.2f}",
+                    "能源": f"{city.resources['能源']:.2f}",
+                    "稅收": f"{city.resources['稅收']:.2f}",
+                    "合作經濟": f"{city.cooperative_economy_level:.2f}"
+                })
+            
+            if all_city_data:
+                df_cities = pd.DataFrame(all_city_data)
+                st.dataframe(df_cities.set_index("城市"))
 
     st.markdown("---")
     st.markdown("## 🗞️ 未來之城日報")
     with st.container():
-        if st.session_state.temp_global_events:
-            st.markdown("最新事件報告：")
-            for entry in reversed(list(st.session_state.temp_global_events)):
-                st.write(f"- {entry}")
+        if galaxy.global_events_log:
+            st.markdown("點擊年份查看當年度事件：")
+            # 使用 reversed() 讓最新的事件顯示在最上面
+            for report_entry in reversed(galaxy.global_events_log):
+                year = report_entry['year']
+                event_type = report_entry['type']
+                event_content = report_entry['event']
+                with st.expander(f"**第 {year} 年** - {event_type}"):
+                    st.write(event_content)
         else:
-            st.info("目前沒有事件報告。")
+            st.info("目前沒有重大新聞事件發生。")
 
