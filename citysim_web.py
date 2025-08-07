@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地計畫 v1.0
+# 🚀 火星殖民地計畫 v1.1
 import streamlit as st
 import random
 
@@ -91,9 +91,17 @@ def display_dashboard():
     cols[4].metric("🔩 鋼材", f"{res['鋼材']:.1f}")
 
     # 使用進度條視覺化關鍵生存資源
-    st.progress(max(0, min(100, res['食物'])), text=f"食物存量 ({res['食物']:.1f})")
-    st.progress(max(0, min(100, res['水源'])), text=f"水源存量 ({res['水源']:.1f})")
-    st.progress(max(0, min(100, res['氧氣'])), text=f"氧氣存量 ({res['氧氣']:.1f})")
+    # *** BUG 修正 ***
+    # st.progress 的值必須在 0.0 到 1.0 之間。
+    # 我們設定一個合理的容量上限 (例如 200) 來計算百分比。
+    max_resource_for_progress = 200.0
+    food_progress = max(0.0, min(1.0, res['食物'] / max_resource_for_progress))
+    water_progress = max(0.0, min(1.0, res['水源'] / max_resource_for_progress))
+    oxygen_progress = max(0.0, min(1.0, res['氧氣'] / max_resource_for_progress))
+
+    st.progress(food_progress, text=f"食物存量 ({res['食物']:.1f})")
+    st.progress(water_progress, text=f"水源存量 ({res['水源']:.1f})")
+    st.progress(oxygen_progress, text=f"氧氣存量 ({res['氧氣']:.1f})")
     st.markdown("---")
 
 def display_construction_panel():
@@ -173,7 +181,7 @@ def display_victory_screen():
     st.markdown(f"你在 **{st.session_state.game_day}** 天內成功建立了擁有 **{st.session_state.population}** 位居民的自給自足殖民地！")
     st.image("https://placehold.co/600x300/4CAF50/ffffff?text=Colony+Thrives", caption="火星上的新家園！")
 
-    if st.button("� 開啟新的殖民計畫"):
+    if st.button("🚀 開啟新的殖民計畫"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
@@ -226,7 +234,11 @@ def run_next_day_simulation():
     
     if st.session_state.resources["電力"] < 0:
         log_event("🚨 電力嚴重短缺！部分設施停止運作！")
-        power_deficit_ratio = max(0, (production["電力"] * event_modifier["電力"]) / consumption["電力"])
+        # 修正：確保 consumption['電力'] 不為零，避免除零錯誤
+        if consumption["電力"] > 0:
+            power_deficit_ratio = max(0, (production["電力"] * event_modifier["電力"]) / consumption["電力"])
+        else:
+            power_deficit_ratio = 0
         st.session_state.resources["電力"] = 0
     else:
         power_deficit_ratio = 1.0
@@ -266,4 +278,3 @@ def check_game_status():
 
 if __name__ == "__main__":
     main()
-
