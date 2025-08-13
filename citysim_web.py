@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地 v4.0 — Streamlit 從零重構（單檔版，含 safe_rerun 防呆）
+# 🚀 火星殖民地 v4.0 — Streamlit 從零重構（單檔版，含 safe_rerun 防呆 + slider 容量 0 保護）
 # 設計目標：
 # 1) 架構清晰：資料層(Data) / 規則層(Rules) / 介面層(UI) 分離
 # 2) 可擴充：建築/科技/事件以資料驅動，邏輯模組化
@@ -383,13 +383,21 @@ def show_assignment_panel(c: Colony):
     unassigned = c.population - total_assigned
     st.info(f"可用殖民者 **{unassigned}** / 已指派 **{total_assigned}** / 總人口 **{c.population}**")
 
-    need_workers = {n:s for n,s in c.unlocked_buildings.items() if s.workers_needed>0}
+    need_workers = {n: s for n, s in c.unlocked_buildings.items() if s.workers_needed > 0}
     cols = st.columns(len(need_workers) or 1)
-    for i,(n,spec) in enumerate(need_workers.items()):
-        cap = c.buildings.get(n,0) * spec.workers_needed
-        cur = min(c.assignments.get(n,0), cap)
-        nv = cols[i].slider(f"{n} 工人 (容量 {cap})", 0, cap, cur, key=f"asg_{n}")
-        c.assignments[n] = nv
+
+    for i, (n, spec) in enumerate(need_workers.items()):
+        cap = int(c.buildings.get(n, 0) * spec.workers_needed)
+        cur = int(min(c.assignments.get(n, 0), cap))
+        label = f"{n} 工人 (容量 {cap})"
+
+        if cap <= 0:
+            # 某些 Streamlit 版本在 min==max 會拋錯，改為禁用 slider 並提示
+            cols[i].slider(label, 0, 1, 0, key=f"asg_{n}", disabled=True)
+            c.assignments[n] = 0
+        else:
+            nv = cols[i].slider(label, 0, cap, cur, key=f"asg_{n}")
+            c.assignments[n] = int(nv)
 
     if sum(c.assignments.values()) > c.population:
         st.error("警告：指派超過總人口！")
