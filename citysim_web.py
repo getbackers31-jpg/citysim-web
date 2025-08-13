@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 🚀 火星殖民地 v4.0 — Streamlit 從零重構（單檔版）
+# 🚀 火星殖民地 v4.0 — Streamlit 從零重構（單檔版，含 safe_rerun 防呆）
 # 設計目標：
 # 1) 架構清晰：資料層(Data) / 規則層(Rules) / 介面層(UI) 分離
 # 2) 可擴充：建築/科技/事件以資料驅動，邏輯模組化
@@ -9,7 +9,15 @@
 import streamlit as st
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
-import random, json, copy, math
+import random, json, copy
+
+# --- 安全的 rerun 防呆 ---
+def safe_rerun():
+    """兼容新舊 Streamlit 版本的 rerun"""
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
 
 # ===============================
 # ░░ Core Data Models
@@ -46,9 +54,6 @@ class EventCard:
     title: str
     text: str
     # options: [(label, effects)] where effects is list like in Tech
-    # e.g. ("拆解遺跡換 50 鋼材", [("gain", {"鋼材":50})])
-    #      ("研究遺跡得 10 科研", [("gain", {"科研":10})])
-    # 也可用 ("flag", {"morale":-5}) 等
     options: List[Tuple[str, List[Tuple[str, Dict]]]]
 
 @dataclass
@@ -107,12 +112,10 @@ BASE_TECHS: Dict[str, Tech] = {
     ),
 }
 
-# 透過科技解鎖的建築
 UNLOCKABLE_BUILDINGS: Dict[str, BuildingSpec] = {
     "風力渦輪": BuildingSpec("風力渦輪", cost={"鋼材": 160}, produces={"電力": 9}, tags=["風力"]),
 }
 
-# 事件卡（示例，實戰應多做幾張）
 EVENT_CARDS: List[EventCard] = [
     EventCard(
         key="ruins",
@@ -204,7 +207,6 @@ def apply_effects(c: Colony, effects: List[Tuple[str, Dict]]):
         elif eff == "morale":
             c.morale = max(0, min(100, c.morale + float(payload.get("delta", 0))))
         elif eff == "flag":
-            # 旗標/狀態效果，簡化示例：存入 session_state
             st.session_state.setdefault("flags", {})
             st.session_state.flags[payload["key"]] = payload.get("days", 1)
         elif eff == "unlock_building":
@@ -414,7 +416,7 @@ def show_build_panel(c: Colony):
                 if spec.provides_capacity>0:
                     c.capacity += spec.provides_capacity
                 c.log.append(f"第 {c.day} 天：✅ 新增 {name} 1 座")
-                st.experimental_rerun()
+                safe_rerun()
             st.write(f"現有：{c.buildings.get(name,0)}")
 
 
@@ -432,7 +434,7 @@ def show_research_panel(c: Colony):
                     c.techs[k].unlocked = True
                     apply_effects(c, t.effects)
                     c.log.append(f"第 {c.day} 天：🔬 研發完成：{t.name}")
-                    st.experimental_rerun()
+                    safe_rerun()
                 st.caption(f"成本：{t.cost} 科研")
                 st.caption(t.description)
 
@@ -453,7 +455,7 @@ def show_right_panel(c: Colony):
         settle(c, prod, cons_bld, cons_col, fx)
         end_of_day(c)
         sanitize(c)
-        st.experimental_rerun()
+        safe_rerun()
 
     st.markdown("---")
     st.subheader("📜 事件日誌")
@@ -532,11 +534,11 @@ with col_top1:
 with col_top2:
     if st.button("🔄 重新開始 (新局)", use_container_width=True):
         st.session_state.colony = new_game()
-        st.experimental_rerun()
+        safe_rerun()
 with col_top3:
     if st.button("🎲 新局(固定種子)", use_container_width=True):
         st.session_state.colony = new_game(seed=42)
-        st.experimental_rerun()
+        safe_rerun()
 
 st.markdown("---")
 
