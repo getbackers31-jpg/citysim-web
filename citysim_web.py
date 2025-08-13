@@ -17,6 +17,101 @@ from typing import List, Dict, Optional, Tuple, Set
 
 st.set_page_config(page_title="🌐 CitySim 世界模擬器 Pro（可擴充版）", layout="wide")
 
+# ===== UI THEME & STYLES =====
+THEMES = {
+    "Neo Mint": {
+        "bg_grad": "linear-gradient(135deg, #E6FFF4 0%, #F7FFFA 100%)",
+        "card_bg": "rgba(255,255,255,0.70)",
+        "primary": "#10b981",
+        "accent": "#06b6d4",
+        "text": "#0f172a",
+        "muted": "#64748b"
+    },
+    "Cyberpunk": {
+        "bg_grad": "linear-gradient(135deg, #0a0b1a 0%, #17192f 50%, #221133 100%)",
+        "card_bg": "rgba(255,255,255,0.06)",
+        "primary": "#ff4d6d",
+        "accent": "#22d3ee",
+        "text": "#f8fafc",
+        "muted": "#94a3b8"
+    },
+    "Solar": {
+        "bg_grad": "linear-gradient(135deg, #FFF6E5 0%, #FFF9ED 100%)",
+        "card_bg": "rgba(255,255,255,0.75)",
+        "primary": "#f59e0b",
+        "accent": "#ef4444",
+        "text": "#1f2937",
+        "muted": "#6b7280"
+    }
+}
+
+def apply_theme(theme_name: str):
+    t = THEMES.get(theme_name, THEMES["Neo Mint"])
+    st.markdown(f"""
+    <style>
+      :root {{
+        --bg-grad: {t['bg_grad']};
+        --card-bg: {t['card_bg']};
+        --primary: {t['primary']};
+        --accent: {t['accent']};
+        --text: {t['text']};
+        --muted: {t['muted']};
+      }}
+      html, body, .stApp {{
+        background: var(--bg-grad)!important;
+        color: var(--text)!important;
+      }}
+      .block-container {{
+        padding-top: 1.2rem !important;
+        padding-bottom: 3rem !important;
+      }}
+      /* Glass cards */
+      .glass {{
+        background: var(--card-bg);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        padding: 18px 20px;
+        margin: 10px 0 18px 0;
+      }}
+      /* Buttons */
+      .stButton>button {{
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        color: white; border:0; border-radius: 12px; font-weight: 700;
+        padding: 10px 16px; box-shadow: 0 8px 16px rgba(0,0,0,.12);
+        transition: transform .08s ease;
+      }}
+      .stButton>button:hover {{ transform: translateY(-1px); }}
+      /* Headers */
+      h1, h2, h3, h4 {{ color: var(--text)!important; }}
+      /* Tabs */
+      .stTabs [data-baseweb="tab-list"] {{ gap: .5rem; }}
+      .stTabs [data-baseweb="tab"] {{
+        background: var(--card-bg); border-radius: 12px; padding: 10px 14px;
+      }}
+      /* Metrics */
+      [data-testid="stMetricValue"] {{ color: var(--primary)!important; }}
+      /* Dataframes */
+      .stDataFrame, .stTable {{ background: var(--card-bg) !important; border-radius: 12px; }}
+      /* Expander */
+      .streamlit-expanderHeader {{ font-weight: 700; color: var(--text); }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# Fancy title banner
+def fancy_title(title: str, subtitle: str = ""):
+    st.markdown(f"""
+    <div class='glass' style='padding:22px 24px; display:flex; align-items:center; gap:14px;'>
+      <div style='font-size:34px'>🪐</div>
+      <div>
+        <div style='font-weight:800; font-size:26px; letter-spacing:.3px'>{title}</div>
+        <div style='color:var(--muted); margin-top:2px'>{subtitle}</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # =====================================
 # CONFIG 與 REGISTRIES（集中可調參數）
 # =====================================
@@ -568,9 +663,14 @@ def simulate_year(galaxy: Galaxy):
 # UI
 # =============================
 
-st.title("🌐 CitySim 世界模擬器 Pro（可擴充版 / 技能樹 / 多星球競爭）")
+fancy_title("CitySim 世界模擬器 Pro", "可擴充版 · 技能樹 · 多星球競爭")
 
 with st.sidebar:
+    # Theme picker
+    st.markdown("### 🎨 主題配色")
+    picked = st.selectbox("選擇主題", list(THEMES.keys()), index=1)
+    apply_theme(picked)
+
     st.header("⚙️ 模擬設定")
     years_per_step = st.slider("每次模擬年數", 1, 100, 10)
     if st.button("執行模擬步驟"):
@@ -646,6 +746,20 @@ with st.sidebar:
                             st.button("不可解鎖", disabled=True, key=f"disabled_{sel_planet.name}_{key}")
 
 st.markdown(f"### ⏳ 當前年份：{galaxy.year}")
+# KPI bar
+with st.container():
+    from math import fsum
+    total_planets = len(galaxy.planets)
+    total_cities = sum(len(p.cities) for p in galaxy.planets)
+    total_pop = sum(len(c.citizens) for p in galaxy.planets for c in p.cities)
+    avg_tech = 0.0
+    if total_planets:
+        avg_tech = sum(sum(p.tech_levels.values())/4 for p in galaxy.planets)/total_planets
+    c1,c2,c3,c4 = st.columns(4)
+    c1.metric("行星數", total_planets)
+    c2.metric("城市數", total_cities)
+    c3.metric("總人口", total_pop)
+    c4.metric("平均科技", f"{avg_tech:.2f}")
 
 # =============================
 # 地圖與總覽
@@ -669,6 +783,7 @@ if galaxy.planets:
         })
     dfp = pd.DataFrame(rows)
     fig = go.Figure()
+    fig.update_layout(template='plotly_dark' if THEMES.get(picked)==THEMES['Cyberpunk'] else None)
     for p in galaxy.planets:
         for other, status in p.relations.items():
             po = next((x for x in galaxy.planets if x.name==other and x.is_alive), None)
